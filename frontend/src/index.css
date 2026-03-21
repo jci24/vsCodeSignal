@@ -1,0 +1,106 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 0.25rem);
+  --radius-md: calc(var(--radius) - 0.125rem);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.25rem);
+}
+
+:root {
+  --background: oklch(0.978 0.012 84.52);
+  --foreground: oklch(0.252 0.028 255.01);
+  --card: oklch(0.994 0.005 95.11 / 88%);
+  --card-foreground: oklch(0.252 0.028 255.01);
+  --popover: oklch(0.988 0.006 95.11);
+  --popover-foreground: oklch(0.252 0.028 255.01);
+  --primary: oklch(0.586 0.153 194.21);
+  --primary-foreground: oklch(0.985 0.004 95.11);
+  --secondary: oklch(0.934 0.015 84.52);
+  --secondary-foreground: oklch(0.298 0.033 255.01);
+  --muted: oklch(0.95 0.008 84.52);
+  --muted-foreground: oklch(0.51 0.025 250.22);
+  --accent: oklch(0.901 0.05 84.52);
+  --accent-foreground: oklch(0.27 0.04 255.01);
+  --border: oklch(0.882 0.012 84.52);
+  --input: oklch(0.882 0.012 84.52);
+  --ring: oklch(0.586 0.153 194.21);
+  --chart-1: oklch(0.586 0.153 194.21);
+  --chart-2: oklch(0.694 0.162 163.77);
+  --chart-3: oklch(0.648 0.168 33.7);
+  --chart-4: oklch(0.755 0.123 102.19);
+  --chart-5: oklch(0.512 0.09 255.01);
+  --radius: 1rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-svh bg-background text-foreground antialiased;
+    margin: 0;
+    font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+    background-image:
+      radial-gradient(circle at top left, rgba(10, 154, 176, 0.12), transparent 30%),
+      linear-gradient(180deg, rgba(199, 110, 0, 0.06), transparent 18%),
+      linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0));
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Space Grotesk", "IBM Plex Sans", sans-serif;
+    letter-spacing: -0.03em;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer utilities {
+  .panel-surface {
+    @apply border-border/80 bg-card/85 shadow-[0_20px_60px_-35px_rgba(22,32,72,0.35)] backdrop-blur-xl;
+  }
+
+  .status-dot {
+    @apply inline-block h-2.5 w-2.5 rounded-full;
+  }
+}
+
+#root {
+  min-height: 100svh;
+}
