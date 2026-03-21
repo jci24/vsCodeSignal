@@ -319,8 +319,10 @@ Frontend responsibilities:
 
 ### 18.2 Backend
 - Platform: ASP.NET Core on .NET
+- Endpoint framework: FastEndpoints
 - Shape: modular monolith with feature folders under `Features/`
 - Slice convention: each feature groups its own `Command`, `Endpoint`, `Handler`, and `Response` types together
+- Serialization strategy: JSON by default with MessagePack used for compact binary contracts and payloads where appropriate
 - Persistence: relational database for workspace metadata and pipeline definitions, object/file storage strategy for uploaded signal files and derived artifacts
 - Processing: background job execution for expensive pipeline runs when needed
 - AI: provider adapter layer with prompt templates and context assembly services

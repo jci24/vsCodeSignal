@@ -55,8 +55,10 @@ The first two weeks should not try to finish the whole product. They should esta
 ## Architecture Decisions To Lock In During Week 1
 ### Backend
 - ASP.NET Core Web API on .NET
+- FastEndpoints for the HTTP endpoint layer
 - Feature folders such as `Importer`, `Signals`, `Pipelines`, `Workspaces`, `AiAssistant`, `Reports`
 - Inside each feature: `Command`, `Endpoint`, `Handler`, `Response`
+- MessagePack for compact request/response contracts and binary payload support
 - Canonical signal model for imported datasets
 - Background execution abstraction even if first implementation runs inline
 
