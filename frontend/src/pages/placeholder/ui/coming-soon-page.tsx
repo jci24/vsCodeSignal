@@ -7,7 +7,7 @@ interface ComingSoonPageProps {
 export function ComingSoonPage({ title }: ComingSoonPageProps) {
   return (
     <section className="flex flex-1 items-center justify-center">
-      <Card className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-secondary/35 shadow-none">
+      <Card className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-card shadow-[0_18px_44px_-34px_rgba(15,23,42,0.12)]">
         <CardHeader className="gap-3">
           <p className="text-sm font-medium uppercase tracking-[0.28em] text-muted-foreground">
             Section placeholder
