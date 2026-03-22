@@ -9,6 +9,7 @@ public sealed class UffImportAdapter(
     IHostEnvironment environment,
     ILogger<UffImportAdapter> logger) : IImportAdapter
 {
+    private static readonly TimeSpan SidecarTimeout = TimeSpan.FromSeconds(20);
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".uff",
@@ -26,16 +27,18 @@ public sealed class UffImportAdapter(
         var fileInfo = new FileInfo(path);
         var summary = await RunSidecarAsync(path, ct);
 
-        return new ImportedSignalFile(
-            SourcePath: path,
-            Adapter: Name,
-            Format: summary.Format ?? "uff",
-            SignalKind: summary.SignalKind ?? "engineering-signal",
-            SizeBytes: fileInfo.Length,
-            DurationSeconds: summary.DurationSeconds,
-            SampleRateHz: summary.SampleRateHz,
-            ChannelCount: summary.ChannelCount,
-            Metadata: summary.Metadata);
+        return new ImportedSignalFile
+        {
+            Adapter = Name,
+            ChannelCount = summary.ChannelCount,
+            DurationSeconds = summary.DurationSeconds,
+            Format = summary.Format ?? "uff",
+            Metadata = summary.Metadata,
+            SampleRateHz = summary.SampleRateHz,
+            SignalKind = summary.SignalKind ?? "engineering-signal",
+            SizeBytes = fileInfo.Length,
+            SourcePath = path
+        };
     }
 
     private async Task<UffImportSummary> RunSidecarAsync(string path, CancellationToken ct)
@@ -76,8 +79,19 @@ public sealed class UffImportAdapter(
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
         var stderrTask = process.StandardError.ReadToEndAsync(ct);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(SidecarTimeout);
 
-        await process.WaitForExitAsync(ct);
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            throw new InvalidOperationException(
+                $"UFF import timed out after {SidecarTimeout.TotalSeconds:0} seconds while parsing the file.");
+        }
 
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
@@ -123,11 +137,24 @@ public sealed class UffImportAdapter(
             PropertyNameCaseInsensitive = true
         };
 
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort cleanup when the sidecar stops responding.
+        }
+    }
+
     private sealed record UffImportSummary(
         string? Format,
         string? SignalKind,
         double? DurationSeconds,
         int? SampleRateHz,
         int? ChannelCount,
-        IReadOnlyDictionary<string, string> Metadata);
+        Dictionary<string, string> Metadata);
 }

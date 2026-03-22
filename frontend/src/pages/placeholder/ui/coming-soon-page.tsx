@@ -1,53 +1,69 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card'
-
 interface ComingSoonPageProps {
   title: string
 }
 
 export function ComingSoonPage({ title }: ComingSoonPageProps) {
   return (
-    <section className="flex flex-1 items-center justify-center">
-      <Card className="w-full max-w-3xl rounded-[2rem] border border-border/70 bg-card shadow-[0_18px_44px_-34px_rgba(15,23,42,0.12)]">
-        <CardHeader className="gap-3">
+    <section className="flex flex-1 items-start justify-center">
+      <div className="grid w-full max-w-5xl gap-8">
+        <div className="grid gap-3">
           <p className="text-sm font-medium uppercase tracking-[0.28em] text-muted-foreground">
             Section placeholder
           </p>
-          <CardTitle className="text-3xl md:text-4xl">Coming soon</CardTitle>
-          <CardDescription className="max-w-2xl text-base leading-7">
+          <h3 className="text-3xl font-semibold tracking-tight text-foreground md:text-5xl">
+            Coming soon
+          </h3>
+          <p className="max-w-3xl text-base leading-7 text-muted-foreground">
             This area is reserved for the {title.toLowerCase()} experience. The
             shell is ready, and the first real feature slice will replace this
             placeholder next.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="border-t border-border/60 pt-6">
-          <dl className="grid gap-5 md:grid-cols-3">
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
-                Status
-              </dt>
-              <dd className="mt-2 text-base font-medium text-foreground">
-                Stub ready
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
-                Next
-              </dt>
-              <dd className="mt-2 text-base font-medium text-foreground">
+          </p>
+        </div>
+
+        <div className="rounded-[2rem] border border-border/70 bg-background/72 p-6 md:p-8">
+          <div className="grid gap-6">
+            <div className="grid gap-3">
+              <p className="text-sm font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                Ready next
+              </p>
+              <p className="max-w-2xl text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                 First {title.toLowerCase()} workflow
-              </dd>
+              </p>
+              <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
+                The page shell is in place. The next slice replaces this placeholder
+                with a real working surface instead of a demo scaffold.
+              </p>
             </div>
-            <div>
-              <dt className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+
+            <dl className="grid gap-4 border-t border-border/60 pt-6 md:grid-cols-3">
+              <div className="rounded-[1.4rem] border border-border/60 bg-background px-5 py-4">
+                <dt className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                Status
+                </dt>
+                <dd className="mt-2 text-base font-medium text-foreground">
+                  Stub ready
+                </dd>
+              </div>
+              <div className="rounded-[1.4rem] border border-border/60 bg-background px-5 py-4">
+                <dt className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
+                Next
+                </dt>
+                <dd className="mt-2 text-base font-medium text-foreground">
+                  Feature slice entry
+                </dd>
+              </div>
+              <div className="rounded-[1.4rem] border border-border/60 bg-background px-5 py-4">
+                <dt className="text-xs font-medium uppercase tracking-[0.24em] text-muted-foreground">
                 Scope
-              </dt>
-              <dd className="mt-2 text-base font-medium text-foreground">
-                Page layout and feature slice entry points
-              </dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+                </dt>
+                <dd className="mt-2 text-base font-medium text-foreground">
+                  Layout and interaction surface
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </div>
     </section>
   )
 }

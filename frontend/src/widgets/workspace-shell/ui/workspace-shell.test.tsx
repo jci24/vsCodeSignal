@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { RouterProvider, createMemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 
+import { AppProviders } from '@/app/providers/app-providers'
 import { appRoutes } from '@/app/router'
 
 describe('WorkspaceShell', () => {
@@ -10,7 +11,11 @@ describe('WorkspaceShell', () => {
       initialEntries: ['/signals'],
     })
 
-    render(<RouterProvider router={router} />)
+    render(
+      <AppProviders>
+        <RouterProvider router={router} />
+      </AppProviders>,
+    )
 
     expect(screen.getByRole('navigation', { name: /Primary navigation/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Workspace/i })).toBeInTheDocument()

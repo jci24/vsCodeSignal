@@ -1,0 +1,17 @@
+.root {
+  display: grid;
+  gap: 0.65rem;
+  justify-items: center;
+  padding: 1rem 0.5rem;
+}
+
+.button {
+  min-width: 12rem;
+}
+
+.caption {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--color-muted-foreground);
+}

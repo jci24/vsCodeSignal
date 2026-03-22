@@ -1,5 +1,8 @@
 namespace VSCodeSignals.Api.Features.Import.Common;
 
-public sealed record ImportFilesResult(
-    IReadOnlyList<ImportedSignalFile> ImportedFiles,
-    IReadOnlyList<ImportFailure> FailedPaths);
+public sealed class ImportFilesResult
+{
+    public List<ImportFailure> FailedPaths { get; init; } = [];
+
+    public List<ImportedSignalFile> ImportedFiles { get; init; } = [];
+}

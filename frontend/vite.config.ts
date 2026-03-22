@@ -11,6 +11,14 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  server: {
+    proxy: {
+      '/import': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
+    },
+  },
   test: {
     css: true,
     environment: 'jsdom',

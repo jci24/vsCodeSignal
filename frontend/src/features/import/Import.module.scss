@@ -1,0 +1,28 @@
+.root {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.panel {
+  position: absolute;
+  top: calc(100% + 0.75rem);
+  right: 0;
+  z-index: 20;
+  width: min(22rem, calc(100vw - 2rem));
+  border: 1px solid var(--color-border);
+  border-radius: 1.5rem;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 48px -30px rgba(15, 23, 42, 0.24);
+  backdrop-filter: blur(16px);
+  padding: 1rem;
+}
+
+.textMode,
+.webviewMode {
+  display: block;
+}
+
+.hiddenInput {
+  display: none;
+}
