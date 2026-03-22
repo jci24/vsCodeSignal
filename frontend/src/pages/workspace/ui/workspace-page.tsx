@@ -2,6 +2,8 @@ import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
 import { CircleAlert, Database, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
 
+import { CompareControls } from '@/features/compare-mode/components/CompareControls/CompareControls'
+import { useCompareSelection } from '@/features/compare-mode/hooks/useCompareSelection'
 import { FftPanel } from '@/features/fft/components/FftPanel/FftPanel'
 import { SpectrogramPanel } from '@/features/spectrogram/components/SpectrogramPanel/SpectrogramPanel'
 import { WaveformPanel } from '@/features/waveform/components/WaveformPanel/WaveformPanel'
@@ -46,6 +48,23 @@ export function WorkspacePage(): JSX.Element {
     selectedFile,
     selectFile,
   } = useWorkspaceImports()
+  const importedFiles = batches.flatMap((batch) => batch.importedFiles)
+  const comparableFiles = selectedFile
+    ? importedFiles.filter((file) => file.signalKind === selectedFile.signalKind)
+    : importedFiles
+  const {
+    canCompare,
+    compareFiles,
+    clearCompareSelection,
+    isFileSelectedForCompare,
+    isCompareMode,
+    layoutMode,
+    setLayoutMode,
+    toggleComparisonFile,
+  } = useCompareSelection({
+    files: comparableFiles,
+    primaryFileId: selectedFile?.id ?? null,
+  })
 
   useEffect(() => {
     if (!selectedFile) {
@@ -104,16 +123,27 @@ export function WorkspacePage(): JSX.Element {
       reason: failure.reason,
     })),
   )
-  const importedFiles = batches.flatMap((batch) => batch.importedFiles)
   const detailItems = selectedFile ? getDetailItems(selectedFile) : []
   const metadataEntries = selectedFile
     ? Object.entries(selectedFile.metadata).slice(0, 3)
     : []
   const isAudioFile = selectedFile?.signalKind === 'audio'
+  const allowOverlay = activeView !== 'spectrogram'
+  const effectiveLayout =
+    isCompareMode && layoutMode === 'overlay' && !allowOverlay ? 'stack' : layoutMode
+  const useCompactCharts = isCompareMode && effectiveLayout !== 'overlay'
+  const analysisFiles = selectedFile
+    ? isCompareMode
+      ? [selectedFile, ...compareFiles]
+      : [selectedFile]
+    : []
 
   return (
-    <div className={styles.root}>
-      <div className={styles.workspaceGrid}>
+    <div className={styles.root} data-compare={isCompareMode ? 'true' : 'false'}>
+      <div
+        className={styles.workspaceGrid}
+        data-compare={isCompareMode ? 'true' : 'false'}
+      >
         <aside className={styles.fileRail}>
           <div className={styles.sectionHeader}>
             <p className={styles.sectionEyebrow}>Files</p>
@@ -122,20 +152,40 @@ export function WorkspacePage(): JSX.Element {
           <ul className={styles.fileList}>
             {importedFiles.map((file) => (
               <li key={file.id}>
-                <button
-                  className={styles.fileButton}
-                  data-active={selectedFile?.id === file.id}
-                  onClick={() => selectFile(file.batchId, file.id)}
-                  type="button"
-                >
-                  <span className={styles.fileName}>{file.sourcePath}</span>
-                </button>
+                <div className={styles.fileRow}>
+                  {selectedFile &&
+                  file.id !== selectedFile.id &&
+                  file.signalKind === selectedFile.signalKind ? (
+                    <label className={styles.compareCheckbox}>
+                      <input
+                        checked={isFileSelectedForCompare(file.id)}
+                        onChange={() => toggleComparisonFile(file.id)}
+                        type="checkbox"
+                      />
+                      <span className={styles.compareCheckboxIndicator} />
+                    </label>
+                  ) : (
+                    <span aria-hidden="true" className={styles.compareCheckboxSpacer} />
+                  )}
+
+                  <button
+                    className={styles.fileButton}
+                    data-active={selectedFile?.id === file.id}
+                    onClick={() => selectFile(file.batchId, file.id)}
+                    type="button"
+                  >
+                    <span className={styles.fileName}>{file.sourcePath}</span>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         </aside>
 
-        <section className={styles.previewPane}>
+        <section
+          className={styles.previewPane}
+          data-compare={isCompareMode ? 'true' : 'false'}
+        >
           {failedEntries.length > 0 ? (
             <section className={styles.failureStrip}>
               <div className={styles.failureHeader}>
@@ -158,74 +208,163 @@ export function WorkspacePage(): JSX.Element {
 
           {selectedFile ? (
             <>
-              <div className={styles.previewHeader}>
-                <div className={styles.previewHeading}>
-                  <p className={styles.sectionEyebrow}>Selected file</p>
-                  <h3 className={styles.previewTitle}>{selectedFile.sourcePath}</h3>
-                </div>
-
-                <div className={styles.previewActions}>
-                  {isAudioFile ? (
-                    <div aria-label="Analysis views" className={styles.tabList} role="tablist">
-                      {ANALYSIS_TABS.map((tab) => (
-                        <button
-                          aria-selected={activeView === tab.id}
-                          className={styles.tabButton}
-                          data-active={activeView === tab.id}
-                          key={tab.id}
-                          onClick={() => setActiveView(tab.id)}
-                          role="tab"
-                          type="button"
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
+              <div
+                className={styles.previewLayout}
+                data-compare={isCompareMode ? 'true' : 'false'}
+                data-details-open={isDetailsOpen ? 'true' : 'false'}
+              >
+                <div
+                  className={styles.previewCard}
+                  data-compare={isCompareMode ? 'true' : 'false'}
+                >
+                  <div className={styles.previewHeader}>
+                    <div className={styles.previewHeading}>
+                      <p className={styles.sectionEyebrow}>
+                        {isCompareMode ? 'Compare view' : 'Selected file'}
+                      </p>
+                      <h3 className={styles.previewTitle}>
+                        {isCompareMode
+                          ? `${analysisFiles.length} files`
+                          : selectedFile.sourcePath}
+                      </h3>
                     </div>
-                  ) : null}
 
-                  <Button
-                    className={styles.detailsToggle}
-                    onClick={() => setIsDetailsOpen((current) => !current)}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    {isDetailsOpen ? (
-                      <PanelRightClose className="size-4" />
-                    ) : (
-                      <PanelRightOpen className="size-4" />
-                    )}
-                    Details
-                  </Button>
-                </div>
-              </div>
+                    <div className={styles.analysisToolbar}>
+                      {isAudioFile ? (
+                        <>
+                          <div
+                            aria-label="Analysis views"
+                            className={styles.tabList}
+                            role="tablist"
+                          >
+                            {ANALYSIS_TABS.map((tab) => (
+                              <button
+                                aria-selected={activeView === tab.id}
+                                className={styles.tabButton}
+                                data-active={activeView === tab.id}
+                                key={tab.id}
+                                onClick={() => setActiveView(tab.id)}
+                                role="tab"
+                                type="button"
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
 
-              <div className={styles.previewLayout}>
-                <div className={styles.previewContent}>
-                  <div className={styles.previewSurface}>
-                    {selectedFile.signalKind === 'audio' ? (
-                      <>
-                        {activeView === 'waveform' ? (
-                          <WaveformPanel fileId={selectedFile.id} />
-                        ) : null}
-                        {activeView === 'fft' ? <FftPanel fileId={selectedFile.id} /> : null}
-                        {activeView === 'spectrogram' ? (
-                          <SpectrogramPanel fileId={selectedFile.id} />
-                        ) : null}
-                      </>
-                    ) : (
-                      <div className={styles.previewFallback}>
-                        <Database className="size-5" />
-                        <p>Waveform, FFT, and spectrogram views are enabled for audio in this MVP.</p>
-                      </div>
-                    )}
+                          <CompareControls
+                            allowOverlay={allowOverlay}
+                            canCompare={canCompare}
+                            isCompareMode={isCompareMode}
+                            layoutMode={effectiveLayout}
+                            onClear={clearCompareSelection}
+                            onLayoutChange={setLayoutMode}
+                          />
+                        </>
+                      ) : null}
+
+                      <Button
+                        aria-label={isDetailsOpen ? 'Hide file details' : 'Show file details'}
+                        className={styles.detailsToggle}
+                        data-open={isDetailsOpen}
+                        onClick={() => setIsDetailsOpen((current) => !current)}
+                        type="button"
+                        variant="outline"
+                      >
+                        {isDetailsOpen ? (
+                          <>
+                            <PanelRightClose className="size-4" />
+                            Hide details
+                          </>
+                        ) : (
+                          <>
+                            <PanelRightOpen className="size-4" />
+                            Show details
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
 
-                  {selectedFile.signalKind === 'audio' ? (
-                    <div className={styles.playerStrip}>
-                      <AudioPreviewPlayer src={selectedFile.previewUrl} />
+                  <div
+                    className={styles.previewContent}
+                    data-compare={isCompareMode ? 'true' : 'false'}
+                  >
+                    <div
+                      className={styles.previewSurface}
+                      data-compare={isCompareMode ? 'true' : 'false'}
+                    >
+                      {selectedFile.signalKind === 'audio' ? (
+                        <div
+                          className={styles.analysisCollection}
+                          data-layout={isCompareMode ? effectiveLayout : 'single'}
+                        >
+                          {isCompareMode && effectiveLayout === 'overlay' ? (
+                            <article className={styles.analysisItem} key="overlay">
+                              <div className={styles.analysisItemHeader}>
+                                <p className={styles.analysisItemEyebrow}>Overlay</p>
+                                <h4 className={styles.analysisItemTitle}>
+                                  {analysisFiles.length} files on one chart
+                                </h4>
+                              </div>
+
+                              {activeView === 'waveform' ? (
+                                <WaveformPanel
+                                  comparisonFileIds={compareFiles.map((file) => file.id)}
+                                  fileId={selectedFile.id}
+                                />
+                              ) : null}
+                              {activeView === 'fft' ? (
+                                <FftPanel
+                                  comparisonFileIds={compareFiles.map((file) => file.id)}
+                                  fileId={selectedFile.id}
+                                />
+                              ) : null}
+                            </article>
+                          ) : (
+                            analysisFiles.map((file, index) => (
+                              <article className={styles.analysisItem} key={file.id}>
+                                {isCompareMode ? (
+                                  <div className={styles.analysisItemHeader}>
+                                    <p className={styles.analysisItemEyebrow}>
+                                      {index === 0 ? 'Selected' : 'Compare'}
+                                    </p>
+                                    <h4 className={styles.analysisItemTitle}>
+                                      {file.sourcePath}
+                                    </h4>
+                                  </div>
+                                ) : null}
+
+                                {activeView === 'waveform' ? (
+                                  <WaveformPanel compact={useCompactCharts} fileId={file.id} />
+                                ) : null}
+                                {activeView === 'fft' ? (
+                                  <FftPanel compact={useCompactCharts} fileId={file.id} />
+                                ) : null}
+                                {activeView === 'spectrogram' ? (
+                                  <SpectrogramPanel compact={useCompactCharts} fileId={file.id} />
+                                ) : null}
+                              </article>
+                            ))
+                          )}
+                        </div>
+                      ) : (
+                        <div className={styles.previewFallback}>
+                          <Database className="size-5" />
+                          <p>Waveform, FFT, and spectrogram views are enabled for audio in this MVP.</p>
+                        </div>
+                      )}
                     </div>
-                  ) : null}
+
+                    {selectedFile.signalKind === 'audio' ? (
+                      <div
+                        className={styles.playerDock}
+                        data-compare={isCompareMode ? 'true' : 'false'}
+                      >
+                        <AudioPreviewPlayer src={selectedFile.previewUrl} />
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
 
                 {isDetailsOpen ? (

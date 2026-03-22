@@ -31,19 +31,27 @@ export interface IAnalysisLineSeries {
   color: string
   id: string
   name: string
+  opacity?: number
   points: IAnalysisLinePoint[]
+  width?: number
 }
 
 interface AnalysisLineChartProps {
   className?: string
+  compact?: boolean
   series: IAnalysisLineSeries[]
+  xAxisMin?: number
+  xAxisType?: 'log' | 'value'
   xAxisFormatter?: (value: number) => string
   yAxisFormatter?: (value: number) => string
 }
 
 export function AnalysisLineChart({
   className,
+  compact = false,
   series,
+  xAxisMin,
+  xAxisType = 'value',
   xAxisFormatter,
   yAxisFormatter,
 }: AnalysisLineChartProps): JSX.Element {
@@ -82,33 +90,55 @@ export function AnalysisLineChart({
     }
 
     const option: EChartsOption = {
-      animationDuration: 240,
+      animation: false,
       backgroundColor: 'transparent',
       dataZoom: [
         {
-          bottom: 4,
+          backgroundColor: 'rgba(17,24,39,0.04)',
           brushSelect: false,
+          borderColor: 'rgba(17,24,39,0.08)',
+          bottom: 8,
+          fillerColor: 'rgba(17,24,39,0.08)',
           filterMode: 'none',
-          height: 12,
+          handleIcon:
+            'path://M0 0H12V12H0z',
+          handleSize: 14,
+          handleStyle: {
+            borderColor: 'rgba(17,24,39,0.18)',
+            color: 'rgba(255,255,255,0.96)',
+            shadowBlur: 0,
+          },
+          height: 10,
           moveOnMouseMove: true,
+          moveHandleSize: 0,
+          selectedDataBackground: {
+            lineStyle: {
+              color: 'rgba(17,24,39,0.2)',
+            },
+          },
+          showDataShadow: false,
+          showDetail: false,
           textStyle: {
             color: '#6b7280',
+            fontFamily: 'IBM Plex Sans, sans-serif',
+            fontSize: 11,
           },
           type: 'slider',
         },
       ],
       grid: {
-        bottom: 32,
+        bottom: 34,
         containLabel: true,
-        left: 10,
-        right: 12,
-        top: 20,
+        left: 18,
+        right: 18,
+        top: 24,
       },
       series: series.map((entry) => ({
         data: entry.points.map((point) => [point.x, point.y]),
         lineStyle: {
           color: entry.color,
-          width: 1.8,
+          opacity: entry.opacity ?? 1,
+          width: entry.width ?? 1.7,
         },
         name: entry.name,
         showSymbol: false,
@@ -118,66 +148,82 @@ export function AnalysisLineChart({
       })),
       textStyle: {
         color: '#111827',
-        fontFamily: 'IBM Plex Sans',
+        fontFamily: 'IBM Plex Sans, sans-serif',
       },
       tooltip: {
         axisPointer: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.2)',
+            color: 'rgba(17,24,39,0.18)',
           },
         },
-        backgroundColor: 'rgba(255,255,255,0.96)',
-        borderColor: 'rgba(17,24,39,0.12)',
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        borderColor: 'rgba(17,24,39,0.08)',
         borderWidth: 1,
+        extraCssText:
+          'border-radius: 14px; box-shadow: 0 18px 34px -24px rgba(15,23,42,0.28);',
+        padding: [10, 12],
         textStyle: {
           color: '#111827',
+          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontSize: 12,
         },
         trigger: 'axis',
       },
       xAxis: {
         axisLabel: {
           color: '#6b7280',
+          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontSize: 11,
           formatter: (value: number | string) =>
             xAxisFormatter ? xAxisFormatter(Number(value)) : String(value),
         },
         axisLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.12)',
+            color: 'rgba(17,24,39,0.08)',
           },
         },
         splitLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.06)',
+            color: 'rgba(17,24,39,0.045)',
           },
         },
-        type: 'value',
+        min: xAxisMin,
+        type: xAxisType,
       },
       yAxis: {
         axisLabel: {
           color: '#6b7280',
+          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontSize: 11,
           formatter: (value: number | string) =>
             yAxisFormatter ? yAxisFormatter(Number(value)) : String(value),
         },
         axisLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.12)',
+            color: 'rgba(17,24,39,0.08)',
           },
         },
         splitLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.06)',
+            color: 'rgba(17,24,39,0.045)',
           },
         },
         type: 'value',
       },
     }
 
-    chartRef.current.setOption(option, true)
-  }, [series, xAxisFormatter, yAxisFormatter])
+    chartRef.current.setOption(option, {
+      lazyUpdate: true,
+      notMerge: false,
+      replaceMerge: ['series', 'xAxis', 'yAxis'],
+    })
+  }, [series, xAxisFormatter, xAxisMin, xAxisType, yAxisFormatter])
 
   return (
     <div
-      className={[styles.root, className].filter(Boolean).join(' ')}
+      className={[styles.root, compact ? styles.compact : null, className]
+        .filter(Boolean)
+        .join(' ')}
       ref={containerRef}
     />
   )

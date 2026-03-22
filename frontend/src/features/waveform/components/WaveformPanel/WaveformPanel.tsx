@@ -1,18 +1,39 @@
 import type { JSX } from 'react'
+import { useMemo } from 'react'
 
 import { AnalysisLineChart } from '@/shared/charts/AnalysisLineChart'
 
-import { useWaveformData } from '../../hooks/useWaveformData'
+import { useWaveformData, useWaveformSeriesData } from '../../hooks/useWaveformData'
 import styles from './WaveformPanel.module.scss'
 
 interface WaveformPanelProps {
+  comparisonFileIds?: string[]
+  compact?: boolean
   fileId: string
 }
 
-export function WaveformPanel({ fileId }: WaveformPanelProps): JSX.Element {
-  const { data, errorMessage, isLoading } = useWaveformData(fileId)
+export function WaveformPanel({
+  comparisonFileIds = [],
+  compact = false,
+  fileId,
+}: WaveformPanelProps): JSX.Element {
+  const overlayFileIds = useMemo(
+    () => (comparisonFileIds.length > 0 ? [fileId, ...comparisonFileIds] : []),
+    [comparisonFileIds, fileId],
+  )
+  const {
+    data: primaryData,
+    errorMessage: primaryErrorMessage,
+    isLoading: isPrimaryLoading,
+  } = useWaveformData(fileId)
+  const {
+    data: seriesData,
+    errorMessage: seriesErrorMessage,
+    isLoading: isSeriesLoading,
+  } = useWaveformSeriesData(overlayFileIds)
+  const isCompareMode = seriesData.length > 1
 
-  if (isLoading) {
+  if (isPrimaryLoading || (overlayFileIds.length > 0 ? isSeriesLoading : false)) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>Loading waveform</p>
@@ -21,16 +42,16 @@ export function WaveformPanel({ fileId }: WaveformPanelProps): JSX.Element {
     )
   }
 
-  if (errorMessage) {
+  if (primaryErrorMessage || seriesErrorMessage) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>Waveform unavailable</p>
-        <p className={styles.stateCopy}>{errorMessage}</p>
+        <p className={styles.stateCopy}>{primaryErrorMessage ?? seriesErrorMessage}</p>
       </div>
     )
   }
 
-  if (!data || data.points.length === 0) {
+  if (!primaryData || primaryData.points.length === 0) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>No waveform data</p>
@@ -39,20 +60,52 @@ export function WaveformPanel({ fileId }: WaveformPanelProps): JSX.Element {
     )
   }
 
-  return (
-    <div className={styles.root}>
-      <AnalysisLineChart
-        series={[
+  const colorScale = ['#111827', '#0f766e', '#1d4ed8', '#b45309', '#7c3aed', '#be123c']
+  const chartSeries =
+    seriesData.length > 0
+      ? seriesData.map((entry, index) => ({
+          color: colorScale[index % colorScale.length],
+          id: entry.fileId,
+          name: entry.sourcePath,
+          opacity: index === 0 ? 1 : 0.72,
+          points: entry.points.map((point) => ({
+            x: point.timeSeconds,
+            y: point.amplitude,
+          })),
+          width: index === 0 ? 1.75 : 1.3,
+        }))
+      : [
           {
-            color: '#111827',
-            id: data.fileId,
-            name: 'Waveform',
-            points: data.points.map((point) => ({
+            color: colorScale[0],
+            id: primaryData.fileId,
+            name: primaryData.sourcePath,
+            points: primaryData.points.map((point) => ({
               x: point.timeSeconds,
               y: point.amplitude,
             })),
+            width: 1.75,
           },
-        ]}
+        ]
+
+  return (
+    <div className={styles.root}>
+      {isCompareMode ? (
+        <div className={styles.compareLegend}>
+          {chartSeries.map((entry, index) => (
+            <span className={styles.legendItem} key={entry.id}>
+              <span
+                className={styles.legendSwatch}
+                style={{ background: colorScale[index % colorScale.length] }}
+              />
+              {index === 0 ? 'Selected' : entry.name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      <AnalysisLineChart
+        compact={compact}
+        series={chartSeries}
         xAxisFormatter={formatSeconds}
         yAxisFormatter={formatAmplitude}
       />

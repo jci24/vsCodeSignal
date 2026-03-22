@@ -8,12 +8,22 @@
   overflow: hidden;
 }
 
+.root[data-compare='true'] {
+  overflow: auto;
+}
+
 .workspaceGrid {
   display: grid;
   min-height: 0;
   height: 100%;
   gap: 2rem;
   overflow: hidden;
+}
+
+.workspaceGrid[data-compare='true'] {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
 }
 
 .fileRail {
@@ -36,16 +46,28 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.85rem;
   overflow: auto;
   padding-left: 0.25rem;
+}
+
+.previewPane[data-compare='true'] {
+  overflow: visible;
 }
 
 .previewLayout {
   display: flex;
   min-height: 0;
+  flex: 1;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.85rem;
+  overflow: hidden;
+}
+
+.previewLayout[data-compare='true'] {
+  min-height: fit-content;
+  flex: none;
+  overflow: visible;
 }
 
 .sectionHeader,
@@ -103,6 +125,51 @@
   list-style: none;
   overflow: auto;
   padding-right: 0.2rem;
+}
+
+.fileRow {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.compareCheckbox,
+.compareCheckboxSpacer {
+  display: flex;
+  width: 1.25rem;
+  flex: 0 0 1.25rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.compareCheckbox {
+  position: relative;
+  cursor: pointer;
+}
+
+.compareCheckbox input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.compareCheckboxIndicator {
+  width: 0.95rem;
+  height: 0.95rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.28rem;
+  background: rgba(255, 255, 255, 0.86);
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.compareCheckbox input:checked + .compareCheckboxIndicator {
+  border-color: rgba(17, 24, 39, 0.08);
+  background: rgba(17, 24, 39, 0.92);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.92);
 }
 
 .fileButton {
@@ -200,14 +267,35 @@
   gap: 0.2rem;
 }
 
+.previewCard {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.95rem 1rem 1rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 1.5rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 248, 248, 0.92)),
+    radial-gradient(circle at top, rgba(0, 0, 0, 0.02), transparent 62%);
+  box-shadow: 0 24px 40px -36px rgba(15, 23, 42, 0.26);
+}
+
+.previewCard[data-compare='true'] {
+  min-height: fit-content;
+  flex: none;
+  overflow: visible;
+}
+
 .previewHeader {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding-bottom: 0.85rem;
-  border-bottom: 1px solid var(--color-border);
+  gap: 0.65rem;
+  padding-bottom: 0.35rem;
 }
 
 .previewHeading {
@@ -217,32 +305,57 @@
   gap: 0.35rem;
 }
 
-.previewActions {
+.analysisToolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.55rem;
 }
 
 .detailsToggle {
-  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  align-self: center;
+  min-height: 2.25rem;
+  padding-inline: 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--color-muted-foreground);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.detailsToggle:hover,
+.detailsToggle[data-open='true'] {
+  background: var(--color-secondary);
+  color: var(--color-foreground);
 }
 
 .tabList {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 0.45rem;
+  gap: 0.3rem;
+  padding: 0.22rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 249, 249, 0.88)),
+    radial-gradient(circle at top, rgba(0, 0, 0, 0.02), transparent 58%);
+  box-shadow: 0 12px 24px -24px rgba(15, 23, 42, 0.22);
 }
 
 .tabButton {
-  padding: 0.52rem 0.9rem;
-  border: 1px solid var(--color-border);
+  padding: 0.42rem 0.76rem;
+  border: 1px solid transparent;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
+  background: transparent;
   color: var(--color-muted-foreground);
-  font-size: 0.88rem;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.82rem;
   font-weight: 500;
+  letter-spacing: -0.01em;
   transition:
     border-color 160ms ease,
     background-color 160ms ease,
@@ -252,8 +365,8 @@
 
 .tabButton:hover,
 .tabButton[data-active='true'] {
-  border-color: rgba(17, 24, 39, 0.12);
-  background: rgba(17, 24, 39, 0.92);
+  border-color: rgba(17, 24, 39, 0.08);
+  background: rgba(17, 24, 39, 0.9);
   color: white;
 }
 
@@ -261,7 +374,7 @@
 .stateTitle {
   margin: 0;
   max-width: 20ch;
-  font-size: clamp(1.55rem, 2.2vw, 2.15rem);
+  font-size: clamp(1.4rem, 2vw, 1.9rem);
   font-weight: 600;
   line-height: 1.05;
   letter-spacing: -0.04em;
@@ -275,21 +388,97 @@
   flex: 1;
   align-items: stretch;
   justify-content: stretch;
+  overflow: auto;
+  padding: 0 0.1rem 0 0;
+}
+
+.previewSurface[data-compare='true'] {
+  flex: none;
+  overflow: visible;
 }
 
 .previewContent {
-  display: flex;
+  display: grid;
   min-width: 0;
   min-height: 0;
   flex: 1;
-  flex-direction: column;
-  gap: 1rem;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  overflow: hidden;
 }
 
-.playerStrip {
+.previewContent[data-compare='true'] {
   display: flex;
+  min-height: fit-content;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.analysisCollection {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.85rem;
+  align-content: start;
+}
+
+.analysisCollection[data-layout='single'],
+.analysisCollection[data-layout='stack'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.analysisCollection[data-layout='grid'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analysisItem {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 1.15rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 250, 250, 0.88)),
+    radial-gradient(circle at top, rgba(0, 0, 0, 0.015), transparent 60%);
+}
+
+.analysisItemHeader {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.analysisItemEyebrow {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.analysisItemTitle {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--color-foreground);
+  overflow-wrap: anywhere;
+}
+
+.playerDock {
+  display: flex;
+  flex-shrink: 0;
   justify-content: center;
-  padding-top: 0.25rem;
+  padding-top: 0.15rem;
+  border-top: 1px solid rgba(17, 24, 39, 0.08);
+}
+
+.playerDock[data-compare='true'] {
+  margin-top: 0.35rem;
 }
 
 .previewFallback,
@@ -299,8 +488,11 @@
 
 .previewFallback {
   display: flex;
+  width: 100%;
+  min-height: 18rem;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   text-align: center;
   color: var(--color-muted-foreground);
 }
@@ -372,6 +564,76 @@
   min-height: 22rem;
 }
 
+@media (max-width: 767px) {
+  .workspaceGrid {
+    gap: 1rem;
+  }
+
+  .previewPane {
+    gap: 0.85rem;
+    padding-left: 0;
+  }
+
+  .previewHeader {
+    gap: 0.55rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .previewTitle,
+  .stateTitle {
+    max-width: none;
+    font-size: clamp(1.4rem, 8vw, 2rem);
+  }
+
+  .tabList {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .analysisToolbar {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .analysisCollection[data-layout='grid'] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tabButton {
+    padding: 0.42rem 0.72rem;
+    font-size: 0.8rem;
+  }
+
+  .detailsSidebar {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+}
+
+@media (max-height: 860px) {
+  .workspaceGrid {
+    gap: 1rem;
+  }
+
+  .previewPane {
+    gap: 0.8rem;
+  }
+
+  .previewHeader {
+    gap: 0.55rem;
+    padding-bottom: 0.2rem;
+  }
+
+  .previewTitle,
+  .stateTitle {
+    font-size: clamp(1.35rem, 2vw, 1.85rem);
+  }
+
+  .previewContent {
+    gap: 0.55rem;
+  }
+}
+
 @media (min-width: 768px) {
   .metricRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -381,30 +643,52 @@
 @media (min-width: 1120px) {
   .workspaceGrid {
     grid-template-columns: 18rem minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .workspaceGrid[data-compare='true'] {
     align-items: start;
   }
 
   .fileRail {
+    align-self: stretch;
     min-height: 0;
     padding: 1rem;
   }
 
   .previewPane {
-    padding-left: 1rem;
+    height: 100%;
+    padding-left: 0.85rem;
+  }
+
+  .previewPane[data-compare='true'] {
+    height: auto;
   }
 
   .previewLayout {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .previewLayout[data-details-open='true'] {
+    grid-template-columns: minmax(0, 1fr) minmax(13.5rem, 15rem);
+    column-gap: 1rem;
   }
 
   .previewContent {
     min-width: 0;
   }
 
+  .analysisCollection[data-layout='grid'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .detailsSidebar {
-    width: 17rem;
-    min-width: 17rem;
+    width: auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
     padding: 0 0 0 1rem;
     border-top: 0;
     border-left: 1px solid var(--color-border);

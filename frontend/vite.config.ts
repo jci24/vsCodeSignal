@@ -13,7 +13,19 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/fft': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
       '/import': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
+      '/spectrogram': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
+      '/waveform': {
         changeOrigin: true,
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
       },

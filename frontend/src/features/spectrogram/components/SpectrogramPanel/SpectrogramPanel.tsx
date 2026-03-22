@@ -6,13 +6,43 @@ import { useSpectrogramData } from '../../hooks/useSpectrogramData'
 import styles from './SpectrogramPanel.module.scss'
 
 interface SpectrogramPanelProps {
+  compact?: boolean
+  comparisonFileId?: string | null
   fileId: string
 }
 
-export function SpectrogramPanel({ fileId }: SpectrogramPanelProps): JSX.Element {
-  const { data, errorMessage, isLoading } = useSpectrogramData(fileId)
+export function SpectrogramPanel({
+  compact = false,
+  comparisonFileId = null,
+  fileId,
+}: SpectrogramPanelProps): JSX.Element {
+  const {
+    data: primaryData,
+    errorMessage: primaryErrorMessage,
+    isLoading: isPrimaryLoading,
+  } = useSpectrogramData(fileId)
+  const {
+    data: comparisonData,
+    errorMessage: comparisonErrorMessage,
+    isLoading: isComparisonLoading,
+  } = useSpectrogramData(comparisonFileId)
+  const compareData = comparisonFileId && comparisonData ? comparisonData : null
+  const primaryChartKey = [
+    fileId,
+    compact ? 'compact' : 'full',
+    primaryData?.times.length ?? 0,
+    primaryData?.frequencies.length ?? 0,
+    primaryData?.cells.length ?? 0,
+  ].join(':')
+  const compareChartKey = [
+    comparisonFileId ?? 'none',
+    compact ? 'compact' : 'full',
+    compareData?.times.length ?? 0,
+    compareData?.frequencies.length ?? 0,
+    compareData?.cells.length ?? 0,
+  ].join(':')
 
-  if (isLoading) {
+  if (isPrimaryLoading || (comparisonFileId ? isComparisonLoading : false)) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>Loading spectrogram</p>
@@ -21,16 +51,16 @@ export function SpectrogramPanel({ fileId }: SpectrogramPanelProps): JSX.Element
     )
   }
 
-  if (errorMessage) {
+  if (primaryErrorMessage || comparisonErrorMessage) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>Spectrogram unavailable</p>
-        <p className={styles.stateCopy}>{errorMessage}</p>
+        <p className={styles.stateCopy}>{primaryErrorMessage ?? comparisonErrorMessage}</p>
       </div>
     )
   }
 
-  if (!data || data.cells.length === 0) {
+  if (!primaryData || primaryData.cells.length === 0) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>No spectrogram data</p>
@@ -39,19 +69,44 @@ export function SpectrogramPanel({ fileId }: SpectrogramPanelProps): JSX.Element
     )
   }
 
+  if (compareData) {
+    return (
+      <div className={styles.root}>
+        <div className={styles.compareGrid}>
+          <div className={styles.comparePanel}>
+            <p className={styles.compareLabel}>Selected</p>
+            <AnalysisHeatmapChart
+              compact={compact}
+              frequencies={primaryData.frequencies}
+              key={primaryChartKey}
+              points={primaryData.cells}
+              times={primaryData.times}
+            />
+          </div>
+
+          <div className={styles.comparePanel}>
+            <p className={styles.compareLabel}>Compare</p>
+            <AnalysisHeatmapChart
+              compact={compact}
+              frequencies={compareData.frequencies}
+              key={compareChartKey}
+              points={compareData.cells}
+              times={compareData.times}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.root}>
       <AnalysisHeatmapChart
-        points={data.cells
-          .map((cell) => ({
-            frequencyHz: data.frequencies[cell.frequencyIndex],
-            intensity: cell.intensity,
-            timeSeconds: data.times[cell.timeIndex],
-          }))
-          .filter(
-            (point) =>
-              typeof point.frequencyHz === 'number' && typeof point.timeSeconds === 'number',
-          )}
+        compact={compact}
+        frequencies={primaryData.frequencies}
+        key={primaryChartKey}
+        points={primaryData.cells}
+        times={primaryData.times}
       />
     </div>
   )

@@ -23,25 +23,51 @@ echarts.use([
 ])
 
 export interface IAnalysisHeatmapPoint {
-  frequencyHz: number
+  frequencyIndex: number
   intensity: number
-  timeSeconds: number
+  timeIndex: number
 }
 
 interface AnalysisHeatmapChartProps {
   className?: string
+  compact?: boolean
+  frequencies: number[]
   points: IAnalysisHeatmapPoint[]
+  times: number[]
 }
 
 export function AnalysisHeatmapChart({
   className,
+  compact = false,
+  frequencies,
   points,
+  times,
 }: AnalysisHeatmapChartProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const chartRef = useRef<echarts.EChartsType | null>(null)
+  const resizeTimeoutRef = useRef<number | null>(null)
 
   const resizeChart = useEffectEvent(() => {
     chartRef.current?.resize()
+  })
+
+  const scheduleResize = useEffectEvent(() => {
+    window.requestAnimationFrame(() => {
+      chartRef.current?.resize()
+
+      window.requestAnimationFrame(() => {
+        chartRef.current?.resize()
+      })
+    })
+
+    if (resizeTimeoutRef.current !== null) {
+      window.clearTimeout(resizeTimeoutRef.current)
+    }
+
+    resizeTimeoutRef.current = window.setTimeout(() => {
+      chartRef.current?.resize()
+      resizeTimeoutRef.current = null
+    }, 120)
   })
 
   useEffect(() => {
@@ -58,13 +84,19 @@ export function AnalysisHeatmapChart({
     })
 
     observer.observe(containerRef.current)
+    scheduleResize()
 
     return () => {
+      if (resizeTimeoutRef.current !== null) {
+        window.clearTimeout(resizeTimeoutRef.current)
+        resizeTimeoutRef.current = null
+      }
+
       observer.disconnect()
       chartRef.current?.dispose()
       chartRef.current = null
     }
-  }, [resizeChart])
+  }, [resizeChart, scheduleResize])
 
   useEffect(() => {
     if (!chartRef.current) {
@@ -72,34 +104,39 @@ export function AnalysisHeatmapChart({
     }
 
     const option: EChartsOption = {
-      animationDuration: 220,
+      animation: false,
       backgroundColor: 'transparent',
       grid: {
-        bottom: 14,
+        bottom: 20,
         containLabel: true,
-        left: 10,
+        left: 18,
         right: 18,
-        top: 20,
+        top: 24,
       },
       series: [
         {
           data: points.map((point) => [
-            point.timeSeconds,
-            point.frequencyHz,
+            point.timeIndex,
+            point.frequencyIndex,
             point.intensity,
           ]),
+          itemStyle: {
+            borderRadius: 2,
+          },
           progressive: 3_000,
           type: 'heatmap',
         },
       ],
       textStyle: {
         color: '#111827',
-        fontFamily: 'IBM Plex Sans',
+        fontFamily: 'IBM Plex Sans, sans-serif',
       },
       tooltip: {
-        backgroundColor: 'rgba(255,255,255,0.96)',
-        borderColor: 'rgba(17,24,39,0.12)',
+        backgroundColor: 'rgba(255,255,255,0.98)',
+        borderColor: 'rgba(17,24,39,0.08)',
         borderWidth: 1,
+        extraCssText:
+          'border-radius: 14px; box-shadow: 0 18px 34px -24px rgba(15,23,42,0.28);',
         formatter: (params: { data?: [number, number, number] }) => {
           const data = params.data
 
@@ -107,20 +144,36 @@ export function AnalysisHeatmapChart({
             return ''
           }
 
+          const timeValue = times[data[0]] ?? 0
+          const frequencyValue = frequencies[data[1]] ?? 0
+
           return [
-            `<strong>${formatSeconds(data[0])}</strong>`,
-            `${formatFrequency(data[1])}`,
+            `<strong>${formatSeconds(timeValue)}</strong>`,
+            `${formatFrequency(frequencyValue)}`,
             `Intensity ${Math.round(data[2] * 100)}%`,
           ].join('<br/>')
         },
         textStyle: {
           color: '#111827',
+          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontSize: 12,
         },
       },
       visualMap: {
         calculable: false,
         inRange: {
-          color: ['#fafaf9', '#d6d3d1', '#78716c', '#1c1917'],
+          color: [
+            '#fbfbfd',
+            '#e8eef8',
+            '#bed8f5',
+            '#86b6ef',
+            '#4586dc',
+            '#2150a8',
+            '#1d8f8a',
+            '#79c75b',
+            '#f0bf4c',
+            '#e56b3d',
+          ],
         },
         max: 1,
         min: 0,
@@ -132,45 +185,59 @@ export function AnalysisHeatmapChart({
       xAxis: {
         axisLabel: {
           color: '#6b7280',
-          formatter: (value: number | string) => formatSeconds(Number(value)),
+          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontSize: 11,
+          formatter: (value: string) => formatSeconds(times[Number(value)] ?? 0),
         },
         axisLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.12)',
+            color: 'rgba(17,24,39,0.08)',
           },
         },
         splitLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.04)',
+            color: 'rgba(17,24,39,0.03)',
           },
         },
-        type: 'value',
+        data: times.map((_, index) => index),
+        type: 'category',
       },
       yAxis: {
         axisLabel: {
           color: '#6b7280',
-          formatter: (value: number | string) => formatFrequency(Number(value)),
+          fontFamily: 'IBM Plex Sans, sans-serif',
+          fontSize: 11,
+          formatter: (value: string) => formatFrequency(frequencies[Number(value)] ?? 0),
         },
         axisLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.12)',
+            color: 'rgba(17,24,39,0.08)',
           },
         },
         splitLine: {
           lineStyle: {
-            color: 'rgba(17,24,39,0.04)',
+            color: 'rgba(17,24,39,0.03)',
           },
         },
-        type: 'value',
+        data: frequencies.map((_, index) => index),
+        type: 'category',
       },
     }
 
-    chartRef.current.setOption(option, true)
-  }, [points])
+    chartRef.current.clear()
+    chartRef.current.setOption(option, {
+      lazyUpdate: true,
+      notMerge: true,
+      replaceMerge: ['series', 'xAxis', 'yAxis', 'visualMap'],
+    })
+    scheduleResize()
+  }, [frequencies, points, scheduleResize, times])
 
   return (
     <div
-      className={[styles.root, className].filter(Boolean).join(' ')}
+      className={[styles.root, compact ? styles.compact : null, className]
+        .filter(Boolean)
+        .join(' ')}
       ref={containerRef}
     />
   )

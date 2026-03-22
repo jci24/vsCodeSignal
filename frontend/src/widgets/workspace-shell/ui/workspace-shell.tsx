@@ -155,18 +155,18 @@ export function WorkspaceShell() {
         </aside>
 
         <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-          <div className="flex min-h-full w-full flex-1 flex-col overflow-hidden px-6 pt-3 pb-5 md:px-8 md:pt-0 md:pb-5">
-            <header className="shrink-0 border-b border-border/60 md:min-h-[108px]">
-              <div className="flex flex-col gap-4 pb-4 md:h-full md:flex-row md:items-center md:justify-between md:pb-0">
+          <div className="flex min-h-full w-full flex-1 flex-col overflow-hidden px-5 pt-3 pb-4 md:px-7 md:pt-0 md:pb-4">
+            <header className="shrink-0 border-b border-border/60 md:min-h-[76px]">
+              <div className="flex flex-col gap-3 pb-3 md:h-full md:flex-row md:items-center md:justify-between md:pb-0">
                 <div>
-                  <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+                  <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-[2rem]">
                     {activeTitle}
                   </h2>
                 </div>
                 <Import />
               </div>
             </header>
-            <div className="flex min-h-0 flex-1 overflow-hidden py-4">
+            <div className="flex min-h-0 flex-1 overflow-hidden py-3">
               <Outlet />
             </div>
           </div>
