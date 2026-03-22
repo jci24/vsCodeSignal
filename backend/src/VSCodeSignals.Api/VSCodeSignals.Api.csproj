@@ -8,7 +8,14 @@
 
   <ItemGroup>
     <PackageReference Include="FastEndpoints" Version="8.0.1" />
+    <PackageReference Include="FFMpegCore" Version="5.4.0" />
     <PackageReference Include="MessagePack" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Features/Import/Common/pyuff_import.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>
