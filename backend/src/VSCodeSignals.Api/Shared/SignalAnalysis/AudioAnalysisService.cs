@@ -1,0 +1,339 @@
+using System.Diagnostics;
+using System.Numerics;
+using VSCodeSignals.Api.Features.Workspaces.Response;
+
+namespace VSCodeSignals.Api.Shared.SignalAnalysis;
+
+public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
+{
+    private const int TargetSampleRate = 22050;
+    private const int WaveformPointCount = 1200;
+    private const int FftSize = 4096;
+    private const int SpectrogramWindowSize = 512;
+    private const int SpectrogramHopSize = 256;
+    private const int MaxSpectrogramFrames = 120;
+    private const int MaxSpectrogramBins = 96;
+    private static readonly TimeSpan DecodeTimeout = TimeSpan.FromSeconds(20);
+
+    public async Task<DecodedAudioSignal> DecodeMonoAsync(string filePath, CancellationToken ct)
+    {
+        var ffmpegPath = ResolveFfmpegExecutable();
+        using var stdout = new MemoryStream();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = ffmpegPath,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        startInfo.ArgumentList.Add("-v");
+        startInfo.ArgumentList.Add("error");
+        startInfo.ArgumentList.Add("-i");
+        startInfo.ArgumentList.Add(filePath);
+        startInfo.ArgumentList.Add("-f");
+        startInfo.ArgumentList.Add("f32le");
+        startInfo.ArgumentList.Add("-ac");
+        startInfo.ArgumentList.Add("1");
+        startInfo.ArgumentList.Add("-ar");
+        startInfo.ArgumentList.Add(TargetSampleRate.ToString());
+        startInfo.ArgumentList.Add("pipe:1");
+
+        using var process = new Process { StartInfo = startInfo };
+        process.Start();
+
+        var copyTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, ct);
+        var stderrTask = process.StandardError.ReadToEndAsync(ct);
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(DecodeTimeout);
+
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+            await copyTask;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            throw new InvalidOperationException(
+                $"Audio analysis timed out after {DecodeTimeout.TotalSeconds:0} seconds.");
+        }
+
+        var stderr = await stderrTask;
+
+        if (process.ExitCode != 0)
+        {
+            var reason = string.IsNullOrWhiteSpace(stderr) ? "Unknown ffmpeg failure." : stderr.Trim();
+            logger.LogWarning("Audio analysis decode failed for {Path}: {Reason}", filePath, reason);
+            throw new InvalidOperationException($"Audio analysis failed. {reason}");
+        }
+
+        var bytes = stdout.ToArray();
+
+        if (bytes.Length == 0)
+            throw new InvalidOperationException("Audio analysis could not decode any PCM samples.");
+
+        var sampleCount = bytes.Length / sizeof(float);
+        var samples = new float[sampleCount];
+
+        for (var index = 0; index < sampleCount; index++)
+            samples[index] = BitConverter.ToSingle(bytes, index * sizeof(float));
+
+        return new DecodedAudioSignal(samples, TargetSampleRate);
+    }
+
+    public IReadOnlyList<WaveformFrame> BuildWaveform(DecodedAudioSignal signal)
+    {
+        if (signal.Samples.Length == 0)
+            return [];
+
+        var bucketSize = Math.Max(1, signal.Samples.Length / WaveformPointCount);
+        var frames = new List<WaveformFrame>((signal.Samples.Length / bucketSize) + 1);
+
+        for (var start = 0; start < signal.Samples.Length; start += bucketSize)
+        {
+            var end = Math.Min(start + bucketSize, signal.Samples.Length);
+            double sum = 0;
+
+            for (var index = start; index < end; index++)
+                sum += signal.Samples[index];
+
+            var average = sum / (end - start);
+            var timeSeconds = (start + ((end - start) / 2.0)) / signal.SampleRate;
+            frames.Add(new WaveformFrame(timeSeconds, average));
+        }
+
+        return frames;
+    }
+
+    public IReadOnlyList<SpectrumBin> BuildSpectrum(DecodedAudioSignal signal)
+    {
+        if (signal.Samples.Length == 0)
+            return [];
+
+        var window = TakeCenteredWindow(signal.Samples, FftSize);
+        var spectrum = ComputeMagnitudeSpectrum(window, signal.SampleRate);
+        return spectrum
+            .Take(Math.Min(1024, spectrum.Count))
+            .ToList();
+    }
+
+    public SpectrogramAnalysis BuildSpectrogram(DecodedAudioSignal signal)
+    {
+        if (signal.Samples.Length < SpectrogramWindowSize)
+            return new SpectrogramAnalysis([], [], []);
+
+        var totalFrames = 1 + ((signal.Samples.Length - SpectrogramWindowSize) / SpectrogramHopSize);
+        var frameStep = Math.Max(1, totalFrames / MaxSpectrogramFrames);
+        var rawCells = new List<(int TimeIndex, int FrequencyIndex, double Value)>();
+        var timeValues = new List<double>();
+        var frequencyValues = BuildFrequencyAxis(signal.SampleRate, SpectrogramWindowSize, MaxSpectrogramBins);
+        var minValue = double.MaxValue;
+        var maxValue = double.MinValue;
+        var outputFrameIndex = 0;
+
+        for (var frame = 0; frame < totalFrames; frame += frameStep)
+        {
+            var start = frame * SpectrogramHopSize;
+            var window = new float[SpectrogramWindowSize];
+            Array.Copy(signal.Samples, start, window, 0, SpectrogramWindowSize);
+
+            var spectrum = ComputeMagnitudeSpectrum(window, signal.SampleRate);
+            var binStep = Math.Max(1, spectrum.Count / MaxSpectrogramBins);
+            timeValues.Add(start / (double)signal.SampleRate);
+
+            for (var bin = 0; bin < MaxSpectrogramBins; bin++)
+            {
+                var spectrumIndex = Math.Min(bin * binStep, spectrum.Count - 1);
+                var value = spectrum[spectrumIndex].Magnitude;
+                minValue = Math.Min(minValue, value);
+                maxValue = Math.Max(maxValue, value);
+                rawCells.Add((outputFrameIndex, bin, value));
+            }
+
+            outputFrameIndex++;
+        }
+
+        var range = Math.Max(maxValue - minValue, 1e-9);
+        var cells = rawCells
+            .Select(cell => new SpectrogramCell(
+                cell.TimeIndex,
+                cell.FrequencyIndex,
+                (cell.Value - minValue) / range))
+            .ToList();
+
+        return new SpectrogramAnalysis(timeValues, frequencyValues, cells);
+    }
+
+    private static List<double> BuildFrequencyAxis(int sampleRate, int fftSize, int binCount)
+    {
+        var axis = new List<double>(binCount);
+        var maxFrequency = sampleRate / 2.0;
+
+        for (var bin = 0; bin < binCount; bin++)
+            axis.Add((maxFrequency / Math.Max(1, binCount - 1)) * bin);
+
+        return axis;
+    }
+
+    private static float[] TakeCenteredWindow(float[] samples, int size)
+    {
+        var window = new float[size];
+
+        if (samples.Length <= size)
+        {
+            Array.Copy(samples, window, samples.Length);
+            return window;
+        }
+
+        var start = Math.Max(0, (samples.Length - size) / 2);
+        Array.Copy(samples, start, window, 0, size);
+        return window;
+    }
+
+    private static List<SpectrumBin> ComputeMagnitudeSpectrum(float[] samples, int sampleRate)
+    {
+        var size = NextPowerOfTwo(samples.Length);
+        var buffer = new Complex[size];
+
+        for (var index = 0; index < size; index++)
+        {
+            var sample = index < samples.Length ? samples[index] : 0f;
+            var window = size > 1
+                ? 0.5 - (0.5 * Math.Cos((2 * Math.PI * index) / (size - 1)))
+                : 1.0;
+            buffer[index] = new Complex(sample * window, 0);
+        }
+
+        PerformFft(buffer);
+
+        var halfSize = size / 2;
+        var result = new List<SpectrumBin>(halfSize);
+
+        for (var index = 0; index < halfSize; index++)
+        {
+            var magnitude = buffer[index].Magnitude / halfSize;
+            var decibel = 20 * Math.Log10(magnitude + 1e-9);
+            var frequency = index * sampleRate / (double)size;
+            result.Add(new SpectrumBin(frequency, decibel));
+        }
+
+        return result;
+    }
+
+    private static int NextPowerOfTwo(int value)
+    {
+        var size = 1;
+
+        while (size < value)
+            size <<= 1;
+
+        return size;
+    }
+
+    private static void PerformFft(Complex[] buffer)
+    {
+        var count = buffer.Length;
+        var j = 0;
+
+        for (var i = 1; i < count; i++)
+        {
+            var bit = count >> 1;
+
+            while ((j & bit) != 0)
+            {
+                j ^= bit;
+                bit >>= 1;
+            }
+
+            j ^= bit;
+
+            if (i < j)
+                (buffer[i], buffer[j]) = (buffer[j], buffer[i]);
+        }
+
+        for (var length = 2; length <= count; length <<= 1)
+        {
+            var angle = -2 * Math.PI / length;
+            var wLength = new Complex(Math.Cos(angle), Math.Sin(angle));
+
+            for (var offset = 0; offset < count; offset += length)
+            {
+                var w = Complex.One;
+
+                for (var index = 0; index < length / 2; index++)
+                {
+                    var even = buffer[offset + index];
+                    var odd = w * buffer[offset + index + (length / 2)];
+                    buffer[offset + index] = even + odd;
+                    buffer[offset + index + (length / 2)] = even - odd;
+                    w *= wLength;
+                }
+            }
+        }
+    }
+
+    private static string ResolveFfmpegExecutable()
+    {
+        var resolvedPath = TryResolveExecutable("ffmpeg");
+
+        if (resolvedPath is not null)
+            return resolvedPath;
+
+        throw new InvalidOperationException(
+            "Signal analysis requires ffmpeg. Install ffmpeg and ensure it is available on PATH.");
+    }
+
+    private static string? TryResolveExecutable(string executableName)
+    {
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+
+        if (string.IsNullOrWhiteSpace(pathValue))
+            return null;
+
+        var executableNames = OperatingSystem.IsWindows()
+            ? new[] { $"{executableName}.exe", executableName }
+            : [executableName];
+
+        foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            foreach (var candidateName in executableNames)
+            {
+                var candidatePath = Path.Combine(directory, candidateName);
+
+                if (File.Exists(candidatePath))
+                    return candidatePath;
+            }
+        }
+
+        return null;
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Best-effort cleanup when ffmpeg stops responding.
+        }
+    }
+}
+
+public sealed record DecodedAudioSignal(float[] Samples, int SampleRate);
+
+public sealed record WaveformFrame(double TimeSeconds, double Amplitude);
+
+public sealed record SpectrumBin(double FrequencyHz, double Magnitude);
+
+public sealed record SpectrogramAnalysis(
+    IReadOnlyList<double> Times,
+    IReadOnlyList<double> Frequencies,
+    IReadOnlyList<SpectrogramCell> Cells);
+
+public sealed record SpectrogramCell(int TimeIndex, int FrequencyIndex, double Intensity);

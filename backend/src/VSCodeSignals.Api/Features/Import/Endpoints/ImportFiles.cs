@@ -1,14 +1,15 @@
 using FastEndpoints;
 using Microsoft.AspNetCore.Http;
-using System.Text.Json;
 using VSCodeSignals.Api.Features.Import.Commands;
 using VSCodeSignals.Api.Features.Import.Common;
 using VSCodeSignals.Api.Features.Import.Handlers;
+using VSCodeSignals.Api.Features.Workspaces.Handler;
 
 namespace VSCodeSignals.Api.Features.Import.Endpoints;
 
 public sealed class ImportFiles(
     ImportFilesHandler handler,
+    WorkspaceImportStore workspaceImportStore,
     ILogger<ImportFiles> logger) : EndpointWithoutRequest
 {
     public override void Configure()
@@ -48,8 +49,45 @@ public sealed class ImportFiles(
                 [.. requestedPaths, .. stagedUpload.Paths],
                 sourceLabels,
                 ct);
+            var workspaceSnapshot = workspaceImportStore.AppendImportBatch(
+                result,
+                stagedUpload.Paths.ToHashSet(StringComparer.OrdinalIgnoreCase));
+            var latestBatch = workspaceSnapshot.Batches.First();
+
+            var response = new ImportFilesResult
+            {
+                BatchId = latestBatch.Id,
+                FailedPaths = latestBatch.FailedPaths
+                    .Select(failure => new ImportFailure
+                    {
+                        Path = failure.Path,
+                        Reason = failure.Reason
+                    })
+                    .ToList(),
+                ImportedFiles = latestBatch.ImportedFiles
+                    .Select(file => new ImportedSignalFile
+                    {
+                        Adapter = file.Adapter,
+                        BatchId = file.BatchId,
+                        ChannelCount = file.ChannelCount,
+                        DurationSeconds = file.DurationSeconds,
+                        Format = file.Format,
+                        Id = file.Id,
+                        Metadata = new Dictionary<string, string>(file.Metadata, StringComparer.OrdinalIgnoreCase),
+                        PreviewUrl = file.PreviewUrl,
+                        SampleRateHz = file.SampleRateHz,
+                        SignalKind = file.SignalKind,
+                        SizeBytes = file.SizeBytes,
+                        SourcePath = file.SourcePath
+                    })
+                    .ToList(),
+                WorkspaceBatchCount = workspaceSnapshot.BatchCount,
+                WorkspaceId = workspaceSnapshot.WorkspaceId,
+                WorkspaceImportedFileCount = workspaceSnapshot.ImportedFileCount
+            };
+
             HttpContext.Response.StatusCode = StatusCodes.Status200OK;
-            await HttpContext.Response.WriteAsJsonAsync(result, cancellationToken: ct);
+            await HttpContext.Response.WriteAsJsonAsync(response, cancellationToken: ct);
         }
         catch (InvalidOperationException ex)
         {

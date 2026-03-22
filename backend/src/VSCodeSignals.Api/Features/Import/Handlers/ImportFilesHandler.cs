@@ -49,11 +49,15 @@ public sealed class ImportFilesHandler(
                 var importedFile = await adapter.ImportAsync(filePath, ct);
                 importedFiles.Add(new ImportedSignalFile
                 {
+                    BatchId = importedFile.BatchId,
                     Adapter = importedFile.Adapter,
                     ChannelCount = importedFile.ChannelCount,
                     DurationSeconds = importedFile.DurationSeconds,
                     Format = importedFile.Format,
+                    Id = importedFile.Id,
                     Metadata = importedFile.Metadata,
+                    PreviewUrl = importedFile.PreviewUrl,
+                    ResolvedPath = filePath,
                     SampleRateHz = importedFile.SampleRateHz,
                     SignalKind = importedFile.SignalKind,
                     SizeBytes = importedFile.SizeBytes,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
 import {
@@ -16,6 +17,7 @@ import type {
 } from '@/features/import/utils/types'
 
 export function useFileImport() {
+  const navigate = useNavigate()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [importHistory, setImportHistory] = useState<IImportHistoryBatch[]>([])
   const [isImporting, setIsImporting] = useState(false)
@@ -66,7 +68,7 @@ export function useFileImport() {
     (selection: IImportSelection, result: IImportResponse): void => {
       setImportHistory((current) => [
         {
-          id: `${Date.now()}-${crypto.randomUUID()}`,
+          id: result.batchId ?? `${Date.now()}-${crypto.randomUUID()}`,
           result,
           selection,
           timestamp: Date.now(),
@@ -76,6 +78,26 @@ export function useFileImport() {
     },
     [],
   )
+
+  const routeToWorkspace = useCallback((result: IImportResponse): void => {
+    const params = new URLSearchParams()
+    const firstImportedFile = result.importedFiles[0]
+
+    if (result.batchId) {
+      params.set('batch', result.batchId)
+    }
+
+    if (firstImportedFile?.id) {
+      params.set('file', firstImportedFile.id)
+    }
+
+    params.set('refresh', Date.now().toString())
+
+    navigate({
+      pathname: '/',
+      search: `?${params.toString()}`,
+    })
+  }, [navigate])
 
   const handleImport = useCallback(async (request: { filePaths: string[] }): Promise<void> => {
     const nextPaths = request.filePaths
@@ -104,6 +126,7 @@ export function useFileImport() {
       appendImportHistory(nextSelection, result)
       setPathDraft('')
       setIsOpen(false)
+      routeToWorkspace(result)
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message)
@@ -114,7 +137,7 @@ export function useFileImport() {
     } finally {
       setIsImporting(false)
     }
-  }, [appendImportHistory])
+  }, [appendImportHistory, routeToWorkspace])
 
   const handleBrowserImport = useCallback(async (files: FileList | File[]): Promise<void> => {
     const nextFiles = Array.from(files)
@@ -137,6 +160,7 @@ export function useFileImport() {
       const result = await uploadFiles(nextFiles)
       appendImportHistory(nextSelection, result)
       setIsOpen(false)
+      routeToWorkspace(result)
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message)
@@ -147,7 +171,7 @@ export function useFileImport() {
     } finally {
       setIsImporting(false)
     }
-  }, [appendImportHistory])
+  }, [appendImportHistory, routeToWorkspace])
 
   const handlePathDraftChange = useCallback((value: string): void => {
     setPathDraft(value)
@@ -166,9 +190,6 @@ export function useFileImport() {
     importHistory.length > 0
       ? [
           `${totalImportedFileCount} imported`,
-          importHistory.length > 1
-            ? `across ${importHistory.length} batches`
-            : null,
           totalFailedFileCount > 0 ? `${totalFailedFileCount} failed` : null,
         ]
           .filter(Boolean)

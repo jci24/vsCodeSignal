@@ -17,6 +17,10 @@ export default defineConfig({
         changeOrigin: true,
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
       },
+      '/workspaces': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
     },
   },
   test: {

@@ -44,6 +44,7 @@ public sealed class FfmpegAudioImportAdapter(ILogger<FfmpegAudioImportAdapter> l
                 DurationSeconds = probeResult.DurationSeconds,
                 Format = Path.GetExtension(path).TrimStart('.').ToLowerInvariant(),
                 Metadata = probeResult.Metadata,
+                ResolvedPath = path,
                 SampleRateHz = probeResult.SampleRateHz,
                 SignalKind = "audio",
                 SizeBytes = fileInfo.Length,

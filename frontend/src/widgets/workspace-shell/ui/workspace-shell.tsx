@@ -51,7 +51,6 @@ const navigationItems = [
 ] as const
 
 interface RouteHandle {
-  description?: string
   title?: string
 }
 
@@ -60,9 +59,6 @@ export function WorkspaceShell() {
   const matches = useMatches()
   const activeHandle = matches.at(-1)?.handle as RouteHandle | undefined
   const activeTitle = activeHandle?.title ?? 'Workspace'
-  const activeDescription =
-    activeHandle?.description ??
-    'Persistent navigation on the left, focused content on the right.'
 
   return (
     <div className="min-h-svh overflow-hidden bg-background p-3">
@@ -75,10 +71,10 @@ export function WorkspaceShell() {
         >
           <div
             className={cn(
-              'border-b border-border/60',
+              'border-b border-border/60 md:min-h-[108px]',
               isCollapsed
-                ? 'flex flex-col items-center gap-3 px-3 py-3'
-                : 'flex items-start justify-between gap-3 px-4 py-3.5',
+                ? 'flex flex-col items-center justify-center gap-3 px-3 py-3'
+                : 'flex items-center justify-between gap-3 px-4 py-3.5',
             )}
           >
             <div
@@ -158,25 +154,19 @@ export function WorkspaceShell() {
           </div>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-1">
-          <div className="flex min-h-full w-full flex-1 flex-col overflow-hidden px-6 py-8 md:px-10">
-            <header className="border-b border-border/60 pb-6">
-              <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          <div className="flex min-h-full w-full flex-1 flex-col overflow-hidden px-6 pt-3 pb-5 md:px-8 md:pt-0 md:pb-5">
+            <header className="shrink-0 border-b border-border/60 md:min-h-[108px]">
+              <div className="flex flex-col gap-4 pb-4 md:h-full md:flex-row md:items-center md:justify-between md:pb-0">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.32em] text-muted-foreground">
-                    {activeTitle}
-                  </p>
-                  <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+                  <h2 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
                     {activeTitle}
                   </h2>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-muted-foreground">
-                    {activeDescription}
-                  </p>
                 </div>
                 <Import />
               </div>
             </header>
-            <div className="flex min-h-0 flex-1 overflow-auto py-6">
+            <div className="flex min-h-0 flex-1 overflow-hidden py-4">
               <Outlet />
             </div>
           </div>

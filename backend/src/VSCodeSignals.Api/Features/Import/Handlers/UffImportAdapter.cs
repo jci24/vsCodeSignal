@@ -34,6 +34,7 @@ public sealed class UffImportAdapter(
             DurationSeconds = summary.DurationSeconds,
             Format = summary.Format ?? "uff",
             Metadata = summary.Metadata,
+            ResolvedPath = path,
             SampleRateHz = summary.SampleRateHz,
             SignalKind = summary.SignalKind ?? "engineering-signal",
             SizeBytes = fileInfo.Length,
