@@ -1,0 +1,36 @@
+.root {
+  width: 100%;
+  min-height: 10.5rem;
+  height: clamp(10.5rem, 28vh, 16rem);
+  border-radius: 1.1rem;
+  overflow: hidden;
+}
+
+.compact {
+  min-height: 8rem;
+  height: clamp(8rem, 20vh, 11rem);
+}
+
+@media (max-width: 767px) {
+  .root {
+    min-height: 9rem;
+    height: clamp(9rem, 26vh, 12rem);
+  }
+
+  .compact {
+    min-height: 7.5rem;
+    height: clamp(7.5rem, 18vh, 9rem);
+  }
+}
+
+@media (max-height: 860px) {
+  .root {
+    min-height: 9.5rem;
+    height: clamp(9.5rem, 24vh, 13rem);
+  }
+
+  .compact {
+    min-height: 7.75rem;
+    height: clamp(7.75rem, 18vh, 9.5rem);
+  }
+}
