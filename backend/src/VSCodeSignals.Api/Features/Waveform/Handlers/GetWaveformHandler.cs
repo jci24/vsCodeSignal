@@ -14,6 +14,7 @@ public sealed class GetWaveformHandler(
     {
         var file = importedAudioFileResolver.Resolve(command.FileId);
         var signal = await audioAnalysisService.DecodeMonoAsync(file.ResolvedPath, ct);
+        signal = audioAnalysisService.ApplyTransforms(signal, command.Transforms);
         var frames = audioAnalysisService.BuildWaveform(signal);
 
         return new GetWaveformResponse

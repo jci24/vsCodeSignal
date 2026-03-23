@@ -313,7 +313,14 @@
   gap: 0.55rem;
 }
 
-.detailsToggle {
+.sidebarActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sidebarToggle {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -327,8 +334,8 @@
   font-weight: 500;
 }
 
-.detailsToggle:hover,
-.detailsToggle[data-open='true'] {
+.sidebarToggle:hover,
+.sidebarToggle[data-open='true'] {
   background: var(--color-secondary);
   color: var(--color-foreground);
 }

@@ -12,6 +12,7 @@ public sealed class GetFftHandler(
     {
         var file = importedAudioFileResolver.Resolve(command.FileId);
         var signal = await audioAnalysisService.DecodeMonoAsync(file.ResolvedPath, ct);
+        signal = audioAnalysisService.ApplyTransforms(signal, command.Transforms);
         var bins = audioAnalysisService.BuildSpectrum(signal);
 
         return new GetFftResponse

@@ -1,28 +1,37 @@
 import { useEffect, useState } from 'react'
 
 import { ApiError } from '@/api/client'
+import {
+  serializeTransformRecipe,
+  type ITransformRecipe,
+} from '@/features/transforms/utils/types'
 
 import { fftService } from '../service/fftService'
-import type { IFftResponse } from '../utils/types'
+import type { IFftRequest, IFftResponse } from '../utils/types'
 
 const fftCache = new Map<string, IFftResponse>()
 
-const fetchFft = async (fileId: string): Promise<IFftResponse> => {
-  const cached = fftCache.get(fileId)
+const getCacheKey = (request: IFftRequest): string =>
+  `${request.fileId}:${serializeTransformRecipe(request.transforms)}`
+
+const fetchFft = async (request: IFftRequest): Promise<IFftResponse> => {
+  const cacheKey = getCacheKey(request)
+  const cached = fftCache.get(cacheKey)
 
   if (cached) {
     return cached
   }
 
-  const result = await fftService.getFft({ fileId })
-  fftCache.set(fileId, result)
+  const result = await fftService.getFft(request)
+  fftCache.set(cacheKey, result)
   return result
 }
 
-export const useFftData = (fileId: string | null) => {
+export const useFftData = (fileId: string | null, transforms?: ITransformRecipe) => {
   const [data, setData] = useState<IFftResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const transformKey = serializeTransformRecipe(transforms)
 
   useEffect(() => {
     if (!fileId) {
@@ -39,7 +48,7 @@ export const useFftData = (fileId: string | null) => {
       setErrorMessage(null)
 
       try {
-        const result = await fetchFft(fileId)
+        const result = await fetchFft({ fileId, transforms })
 
         if (isCancelled) {
           return
@@ -68,7 +77,7 @@ export const useFftData = (fileId: string | null) => {
     return () => {
       isCancelled = true
     }
-  }, [fileId])
+  }, [fileId, transformKey, transforms])
 
   return {
     data,
@@ -77,14 +86,16 @@ export const useFftData = (fileId: string | null) => {
   }
 }
 
-export const useFftSeriesData = (fileIds: string[]) => {
+export const useFftSeriesData = (requests: IFftRequest[]) => {
   const [data, setData] = useState<IFftResponse[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const fileIdsKey = fileIds.join('|')
+  const requestsKey = requests
+    .map((request) => `${request.fileId}:${serializeTransformRecipe(request.transforms)}`)
+    .join('|')
 
   useEffect(() => {
-    if (fileIds.length === 0) {
+    if (requests.length === 0) {
       setData([])
       setErrorMessage(null)
       setIsLoading(false)
@@ -98,7 +109,7 @@ export const useFftSeriesData = (fileIds: string[]) => {
       setErrorMessage(null)
 
       try {
-        const result = await Promise.all(fileIds.map((fileId) => fetchFft(fileId)))
+        const result = await Promise.all(requests.map((request) => fetchFft(request)))
 
         if (isCancelled) {
           return
@@ -127,7 +138,7 @@ export const useFftSeriesData = (fileIds: string[]) => {
     return () => {
       isCancelled = true
     }
-  }, [fileIdsKey])
+  }, [requests, requestsKey])
 
   return {
     data,

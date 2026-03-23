@@ -28,6 +28,10 @@ public sealed class GetFft(GetFftHandler handler) : Endpoint<GetFftCommand, GetF
             RuleFor(command => command.FileId)
                 .NotEmpty()
                 .WithMessage("A fileId is required.");
+
+            RuleFor(command => command.Transforms.GainDb)
+                .InclusiveBetween(-24d, 24d)
+                .WithMessage("gainDb must be between -24 and 24.");
         }
     }
 }

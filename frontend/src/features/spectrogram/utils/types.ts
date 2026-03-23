@@ -1,5 +1,8 @@
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
+
 export interface ISpectrogramRequest {
   fileId: string
+  transforms?: ITransformRecipe
 }
 
 export interface ISpectrogramCell {

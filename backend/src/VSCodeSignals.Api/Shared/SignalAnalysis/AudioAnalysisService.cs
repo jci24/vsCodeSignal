@@ -13,6 +13,7 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
     private const int SpectrogramHopSize = 256;
     private const int MaxSpectrogramFrames = 120;
     private const int MaxSpectrogramBins = 96;
+    private const float TrimSilenceThresholdDb = -42f;
     private static readonly TimeSpan DecodeTimeout = TimeSpan.FromSeconds(20);
 
     public async Task<DecodedAudioSignal> DecodeMonoAsync(string filePath, CancellationToken ct)
@@ -82,6 +83,29 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
             samples[index] = BitConverter.ToSingle(bytes, index * sizeof(float));
 
         return new DecodedAudioSignal(samples, TargetSampleRate);
+    }
+
+    public DecodedAudioSignal ApplyTransforms(
+        DecodedAudioSignal signal,
+        SignalTransformRecipe? transforms)
+    {
+        if (transforms is null || signal.Samples.Length == 0)
+            return signal;
+
+        var samples = signal.Samples;
+
+        if (transforms.TrimSilence)
+            samples = TrimSilence(samples);
+
+        if (transforms.Normalize)
+            samples = Normalize(samples);
+
+        if (Math.Abs(transforms.GainDb) > 0.01)
+            samples = ApplyGain(samples, transforms.GainDb);
+
+        return ReferenceEquals(samples, signal.Samples)
+            ? signal
+            : new DecodedAudioSignal(samples, signal.SampleRate);
     }
 
     public IReadOnlyList<WaveformFrame> BuildWaveform(DecodedAudioSignal signal)
@@ -191,6 +215,70 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
         var start = Math.Max(0, (samples.Length - size) / 2);
         Array.Copy(samples, start, window, 0, size);
         return window;
+    }
+
+    private static float[] ApplyGain(float[] samples, double gainDb)
+    {
+        var multiplier = Math.Pow(10, gainDb / 20d);
+        var transformed = new float[samples.Length];
+
+        for (var index = 0; index < samples.Length; index++)
+            transformed[index] = ClampSample(samples[index] * multiplier);
+
+        return transformed;
+    }
+
+    private static float ClampSample(double sample)
+    {
+        if (sample > 1d)
+            return 1f;
+
+        if (sample < -1d)
+            return -1f;
+
+        return (float)sample;
+    }
+
+    private static float[] Normalize(float[] samples)
+    {
+        var peak = 0f;
+
+        for (var index = 0; index < samples.Length; index++)
+            peak = Math.Max(peak, Math.Abs(samples[index]));
+
+        if (peak < 1e-6f)
+            return samples;
+
+        var scale = 1f / peak;
+        var transformed = new float[samples.Length];
+
+        for (var index = 0; index < samples.Length; index++)
+            transformed[index] = ClampSample(samples[index] * scale);
+
+        return transformed;
+    }
+
+    private static float[] TrimSilence(float[] samples)
+    {
+        var threshold = (float)Math.Pow(10, TrimSilenceThresholdDb / 20d);
+        var start = 0;
+
+        while (start < samples.Length && Math.Abs(samples[start]) < threshold)
+            start++;
+
+        var end = samples.Length - 1;
+
+        while (end > start && Math.Abs(samples[end]) < threshold)
+            end--;
+
+        var trimmedLength = end - start + 1;
+
+        if (trimmedLength <= 0 || trimmedLength == samples.Length)
+            return samples;
+
+        var trimmed = new float[trimmedLength];
+        Array.Copy(samples, start, trimmed, 0, trimmedLength);
+        return trimmed;
     }
 
     private static List<SpectrumBin> ComputeMagnitudeSpectrum(float[] samples, int sampleRate)

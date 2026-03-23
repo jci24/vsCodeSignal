@@ -1,5 +1,8 @@
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
+
 export interface IFftRequest {
   fileId: string
+  transforms?: ITransformRecipe
 }
 
 export interface IFftBin {

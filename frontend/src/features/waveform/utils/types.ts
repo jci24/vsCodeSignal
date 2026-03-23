@@ -1,5 +1,8 @@
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
+
 export interface IWaveformRequest {
   fileId: string
+  transforms?: ITransformRecipe
 }
 
 export interface IWaveformPoint {

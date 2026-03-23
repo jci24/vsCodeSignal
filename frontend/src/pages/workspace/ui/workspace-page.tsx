@@ -1,11 +1,20 @@
 import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
-import { CircleAlert, Database, PanelRightClose, PanelRightOpen, RefreshCw } from 'lucide-react'
+import {
+  CircleAlert,
+  Database,
+  PanelRightClose,
+  PanelRightOpen,
+  RefreshCw,
+  SlidersHorizontal,
+} from 'lucide-react'
 
 import { CompareControls } from '@/features/compare-mode/components/CompareControls/CompareControls'
 import { useCompareSelection } from '@/features/compare-mode/hooks/useCompareSelection'
 import { FftPanel } from '@/features/fft/components/FftPanel/FftPanel'
 import { SpectrogramPanel } from '@/features/spectrogram/components/SpectrogramPanel/SpectrogramPanel'
+import { TransformsPanel } from '@/features/transforms/components/TransformsPanel/TransformsPanel'
+import { useSignalTransforms } from '@/features/transforms/hooks/useSignalTransforms'
 import { WaveformPanel } from '@/features/waveform/components/WaveformPanel/WaveformPanel'
 import { Button } from '@/shared/ui/button'
 
@@ -34,10 +43,11 @@ const ANALYSIS_TABS = [
 ] as const
 
 type AnalysisView = (typeof ANALYSIS_TABS)[number]['id']
+type SidebarPanel = 'details' | 'transforms' | null
 
 export function WorkspacePage(): JSX.Element {
   const [activeView, setActiveView] = useState<AnalysisView>('waveform')
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+  const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>(null)
   const {
     batches,
     errorMessage,
@@ -65,10 +75,18 @@ export function WorkspacePage(): JSX.Element {
     files: comparableFiles,
     primaryFileId: selectedFile?.id ?? null,
   })
+  const {
+    activeTransforms,
+    hasActiveTransforms,
+    resetTransforms,
+    setGainDb,
+    setNormalize,
+    setTrimSilence,
+  } = useSignalTransforms(selectedFile?.id ?? null)
 
   useEffect(() => {
     if (!selectedFile) {
-      setIsDetailsOpen(false)
+      setActiveSidebarPanel(null)
     }
   }, [selectedFile])
 
@@ -137,6 +155,8 @@ export function WorkspacePage(): JSX.Element {
       ? [selectedFile, ...compareFiles]
       : [selectedFile]
     : []
+  const selectedFileTransforms = selectedFile?.signalKind === 'audio' ? activeTransforms : undefined
+  const isSidebarOpen = activeSidebarPanel !== null
 
   return (
     <div className={styles.root} data-compare={isCompareMode ? 'true' : 'false'}>
@@ -211,7 +231,7 @@ export function WorkspacePage(): JSX.Element {
               <div
                 className={styles.previewLayout}
                 data-compare={isCompareMode ? 'true' : 'false'}
-                data-details-open={isDetailsOpen ? 'true' : 'false'}
+                data-details-open={isSidebarOpen ? 'true' : 'false'}
               >
                 <div
                   className={styles.previewCard}
@@ -263,26 +283,50 @@ export function WorkspacePage(): JSX.Element {
                         </>
                       ) : null}
 
-                      <Button
-                        aria-label={isDetailsOpen ? 'Hide file details' : 'Show file details'}
-                        className={styles.detailsToggle}
-                        data-open={isDetailsOpen}
-                        onClick={() => setIsDetailsOpen((current) => !current)}
-                        type="button"
-                        variant="outline"
-                      >
-                        {isDetailsOpen ? (
-                          <>
+                      <div className={styles.sidebarActions}>
+                        {selectedFile.signalKind === 'audio' ? (
+                          <Button
+                            aria-pressed={activeSidebarPanel === 'transforms'}
+                            className={styles.sidebarToggle}
+                            data-open={activeSidebarPanel === 'transforms'}
+                            onClick={() =>
+                              setActiveSidebarPanel((current) =>
+                                current === 'transforms' ? null : 'transforms',
+                              )
+                            }
+                            type="button"
+                            variant="outline"
+                          >
+                            <SlidersHorizontal className="size-4" />
+                            Transforms
+                          </Button>
+                        ) : null}
+
+                        <Button
+                          aria-label={
+                            activeSidebarPanel === 'details'
+                              ? 'Hide file details'
+                              : 'Show file details'
+                          }
+                          aria-pressed={activeSidebarPanel === 'details'}
+                          className={styles.sidebarToggle}
+                          data-open={activeSidebarPanel === 'details'}
+                          onClick={() =>
+                            setActiveSidebarPanel((current) =>
+                              current === 'details' ? null : 'details',
+                            )
+                          }
+                          type="button"
+                          variant="outline"
+                        >
+                          {activeSidebarPanel === 'details' ? (
                             <PanelRightClose className="size-4" />
-                            Hide details
-                          </>
-                        ) : (
-                          <>
+                          ) : (
                             <PanelRightOpen className="size-4" />
-                            Show details
-                          </>
-                        )}
-                      </Button>
+                          )}
+                          Details
+                        </Button>
+                      </div>
                     </div>
                   </div>
 
@@ -312,12 +356,14 @@ export function WorkspacePage(): JSX.Element {
                                 <WaveformPanel
                                   comparisonFileIds={compareFiles.map((file) => file.id)}
                                   fileId={selectedFile.id}
+                                  transforms={selectedFileTransforms}
                                 />
                               ) : null}
                               {activeView === 'fft' ? (
                                 <FftPanel
                                   comparisonFileIds={compareFiles.map((file) => file.id)}
                                   fileId={selectedFile.id}
+                                  transforms={selectedFileTransforms}
                                 />
                               ) : null}
                             </article>
@@ -336,13 +382,25 @@ export function WorkspacePage(): JSX.Element {
                                 ) : null}
 
                                 {activeView === 'waveform' ? (
-                                  <WaveformPanel compact={useCompactCharts} fileId={file.id} />
+                                  <WaveformPanel
+                                    compact={useCompactCharts}
+                                    fileId={file.id}
+                                    transforms={index === 0 ? selectedFileTransforms : undefined}
+                                  />
                                 ) : null}
                                 {activeView === 'fft' ? (
-                                  <FftPanel compact={useCompactCharts} fileId={file.id} />
+                                  <FftPanel
+                                    compact={useCompactCharts}
+                                    fileId={file.id}
+                                    transforms={index === 0 ? selectedFileTransforms : undefined}
+                                  />
                                 ) : null}
                                 {activeView === 'spectrogram' ? (
-                                  <SpectrogramPanel compact={useCompactCharts} fileId={file.id} />
+                                  <SpectrogramPanel
+                                    compact={useCompactCharts}
+                                    fileId={file.id}
+                                    transforms={index === 0 ? selectedFileTransforms : undefined}
+                                  />
                                 ) : null}
                               </article>
                             ))
@@ -367,31 +425,46 @@ export function WorkspacePage(): JSX.Element {
                   </div>
                 </div>
 
-                {isDetailsOpen ? (
+                {activeSidebarPanel ? (
                   <aside className={styles.detailsSidebar}>
-                    <div className={styles.sectionHeader}>
-                      <p className={styles.sectionEyebrow}>File details</p>
-                    </div>
+                    {activeSidebarPanel === 'details' ? (
+                      <>
+                        <div className={styles.sectionHeader}>
+                          <p className={styles.sectionEyebrow}>File details</p>
+                        </div>
 
-                    {detailItems.length > 0 ? (
-                      <div className={styles.metricColumn}>
-                        {detailItems.map((item) => (
-                          <div className={styles.metric} key={item.label}>
-                            <span className={styles.metricLabel}>{item.label}</span>
-                            <strong className={styles.metricValue}>{item.value}</strong>
+                        {detailItems.length > 0 ? (
+                          <div className={styles.metricColumn}>
+                            {detailItems.map((item) => (
+                              <div className={styles.metric} key={item.label}>
+                                <span className={styles.metricLabel}>{item.label}</span>
+                                <strong className={styles.metricValue}>{item.value}</strong>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        ) : null}
+
+                        {metadataEntries.length > 0 ? (
+                          <div className={styles.detailsBlock}>
+                            <dl className={styles.detailList}>
+                              {metadataEntries.map(([key, value]) => (
+                                <DetailRow key={key} label={toTitleCase(key)} value={value} />
+                              ))}
+                            </dl>
+                          </div>
+                        ) : null}
+                      </>
                     ) : null}
 
-                    {metadataEntries.length > 0 ? (
-                      <div className={styles.detailsBlock}>
-                        <dl className={styles.detailList}>
-                          {metadataEntries.map(([key, value]) => (
-                            <DetailRow key={key} label={toTitleCase(key)} value={value} />
-                          ))}
-                        </dl>
-                      </div>
+                    {activeSidebarPanel === 'transforms' && selectedFile.signalKind === 'audio' ? (
+                      <TransformsPanel
+                        hasActiveTransforms={hasActiveTransforms}
+                        onGainDbChange={setGainDb}
+                        onNormalizeChange={setNormalize}
+                        onReset={resetTransforms}
+                        onTrimSilenceChange={setTrimSilence}
+                        transforms={activeTransforms}
+                      />
                     ) : null}
                   </aside>
                 ) : null}

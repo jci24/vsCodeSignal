@@ -1,28 +1,40 @@
 import { useEffect, useState } from 'react'
 
 import { ApiError } from '@/api/client'
+import {
+  serializeTransformRecipe,
+  type ITransformRecipe,
+} from '@/features/transforms/utils/types'
 
 import { waveformService } from '../service/waveformService'
-import type { IWaveformResponse } from '../utils/types'
+import type { IWaveformRequest, IWaveformResponse } from '../utils/types'
 
 const waveformCache = new Map<string, IWaveformResponse>()
 
-const fetchWaveform = async (fileId: string): Promise<IWaveformResponse> => {
-  const cached = waveformCache.get(fileId)
+const getCacheKey = (request: IWaveformRequest): string =>
+  `${request.fileId}:${serializeTransformRecipe(request.transforms)}`
+
+const fetchWaveform = async (request: IWaveformRequest): Promise<IWaveformResponse> => {
+  const cacheKey = getCacheKey(request)
+  const cached = waveformCache.get(cacheKey)
 
   if (cached) {
     return cached
   }
 
-  const result = await waveformService.getWaveform({ fileId })
-  waveformCache.set(fileId, result)
+  const result = await waveformService.getWaveform(request)
+  waveformCache.set(cacheKey, result)
   return result
 }
 
-export const useWaveformData = (fileId: string | null) => {
+export const useWaveformData = (
+  fileId: string | null,
+  transforms?: ITransformRecipe,
+) => {
   const [data, setData] = useState<IWaveformResponse | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const transformKey = serializeTransformRecipe(transforms)
 
   useEffect(() => {
     if (!fileId) {
@@ -39,7 +51,7 @@ export const useWaveformData = (fileId: string | null) => {
       setErrorMessage(null)
 
       try {
-        const result = await fetchWaveform(fileId)
+        const result = await fetchWaveform({ fileId, transforms })
 
         if (isCancelled) {
           return
@@ -68,7 +80,7 @@ export const useWaveformData = (fileId: string | null) => {
     return () => {
       isCancelled = true
     }
-  }, [fileId])
+  }, [fileId, transformKey, transforms])
 
   return {
     data,
@@ -77,14 +89,16 @@ export const useWaveformData = (fileId: string | null) => {
   }
 }
 
-export const useWaveformSeriesData = (fileIds: string[]) => {
+export const useWaveformSeriesData = (requests: IWaveformRequest[]) => {
   const [data, setData] = useState<IWaveformResponse[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const fileIdsKey = fileIds.join('|')
+  const requestsKey = requests
+    .map((request) => `${request.fileId}:${serializeTransformRecipe(request.transforms)}`)
+    .join('|')
 
   useEffect(() => {
-    if (fileIds.length === 0) {
+    if (requests.length === 0) {
       setData([])
       setErrorMessage(null)
       setIsLoading(false)
@@ -98,7 +112,7 @@ export const useWaveformSeriesData = (fileIds: string[]) => {
       setErrorMessage(null)
 
       try {
-        const result = await Promise.all(fileIds.map((fileId) => fetchWaveform(fileId)))
+        const result = await Promise.all(requests.map((request) => fetchWaveform(request)))
 
         if (isCancelled) {
           return
@@ -127,7 +141,7 @@ export const useWaveformSeriesData = (fileIds: string[]) => {
     return () => {
       isCancelled = true
     }
-  }, [fileIdsKey])
+  }, [requests, requestsKey])
 
   return {
     data,

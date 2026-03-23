@@ -14,6 +14,7 @@ public sealed class GetSpectrogramHandler(
     {
         var file = importedAudioFileResolver.Resolve(command.FileId);
         var signal = await audioAnalysisService.DecodeMonoAsync(file.ResolvedPath, ct);
+        signal = audioAnalysisService.ApplyTransforms(signal, command.Transforms);
         var spectrogram = audioAnalysisService.BuildSpectrogram(signal);
 
         return new GetSpectrogramResponse

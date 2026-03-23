@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { useMemo, useState } from 'react'
 
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { AnalysisLineChart } from '@/shared/charts/AnalysisLineChart'
 
 import { useFftData, useFftSeriesData } from '../../hooks/useFftData'
@@ -10,6 +11,7 @@ interface FftPanelProps {
   comparisonFileIds?: string[]
   compact?: boolean
   fileId: string
+  transforms?: ITransformRecipe
 }
 
 type FrequencyScale = 'linear' | 'log'
@@ -18,22 +20,26 @@ export function FftPanel({
   comparisonFileIds = [],
   compact = false,
   fileId,
+  transforms,
 }: FftPanelProps): JSX.Element {
   const [frequencyScale, setFrequencyScale] = useState<FrequencyScale>('linear')
-  const overlayFileIds = useMemo(
-    () => (comparisonFileIds.length > 0 ? [fileId, ...comparisonFileIds] : []),
-    [comparisonFileIds, fileId],
+  const overlayRequests = useMemo(
+    () =>
+      comparisonFileIds.length > 0
+        ? [{ fileId, transforms }, ...comparisonFileIds.map((comparisonFileId) => ({ fileId: comparisonFileId }))]
+        : [],
+    [comparisonFileIds, fileId, transforms],
   )
   const {
     data: primaryData,
     errorMessage: primaryErrorMessage,
     isLoading: isPrimaryLoading,
-  } = useFftData(fileId)
+  } = useFftData(fileId, transforms)
   const {
     data: seriesData,
     errorMessage: seriesErrorMessage,
     isLoading: isSeriesLoading,
-  } = useFftSeriesData(overlayFileIds)
+  } = useFftSeriesData(overlayRequests)
 
   const chartPoints = useMemo(
     () => {
@@ -63,7 +69,7 @@ export function FftPanel({
   }, [frequencyScale, primaryData?.bins, seriesData])
   const isCompareMode = seriesData.length > 1
 
-  if (isPrimaryLoading || (overlayFileIds.length > 0 ? isSeriesLoading : false)) {
+  if (isPrimaryLoading || (overlayRequests.length > 0 ? isSeriesLoading : false)) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>Loading FFT</p>

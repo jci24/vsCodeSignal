@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { useMemo } from 'react'
 
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { AnalysisLineChart } from '@/shared/charts/AnalysisLineChart'
 
 import { useWaveformData, useWaveformSeriesData } from '../../hooks/useWaveformData'
@@ -10,30 +11,35 @@ interface WaveformPanelProps {
   comparisonFileIds?: string[]
   compact?: boolean
   fileId: string
+  transforms?: ITransformRecipe
 }
 
 export function WaveformPanel({
   comparisonFileIds = [],
   compact = false,
   fileId,
+  transforms,
 }: WaveformPanelProps): JSX.Element {
-  const overlayFileIds = useMemo(
-    () => (comparisonFileIds.length > 0 ? [fileId, ...comparisonFileIds] : []),
-    [comparisonFileIds, fileId],
+  const overlayRequests = useMemo(
+    () =>
+      comparisonFileIds.length > 0
+        ? [{ fileId, transforms }, ...comparisonFileIds.map((comparisonFileId) => ({ fileId: comparisonFileId }))]
+        : [],
+    [comparisonFileIds, fileId, transforms],
   )
   const {
     data: primaryData,
     errorMessage: primaryErrorMessage,
     isLoading: isPrimaryLoading,
-  } = useWaveformData(fileId)
+  } = useWaveformData(fileId, transforms)
   const {
     data: seriesData,
     errorMessage: seriesErrorMessage,
     isLoading: isSeriesLoading,
-  } = useWaveformSeriesData(overlayFileIds)
+  } = useWaveformSeriesData(overlayRequests)
   const isCompareMode = seriesData.length > 1
 
-  if (isPrimaryLoading || (overlayFileIds.length > 0 ? isSeriesLoading : false)) {
+  if (isPrimaryLoading || (overlayRequests.length > 0 ? isSeriesLoading : false)) {
     return (
       <div className={styles.state}>
         <p className={styles.stateTitle}>Loading waveform</p>

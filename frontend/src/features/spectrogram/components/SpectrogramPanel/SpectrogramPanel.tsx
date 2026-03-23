@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { AnalysisHeatmapChart } from '@/shared/charts/AnalysisHeatmapChart'
 
 import { useSpectrogramData } from '../../hooks/useSpectrogramData'
@@ -9,18 +10,20 @@ interface SpectrogramPanelProps {
   compact?: boolean
   comparisonFileId?: string | null
   fileId: string
+  transforms?: ITransformRecipe
 }
 
 export function SpectrogramPanel({
   compact = false,
   comparisonFileId = null,
   fileId,
+  transforms,
 }: SpectrogramPanelProps): JSX.Element {
   const {
     data: primaryData,
     errorMessage: primaryErrorMessage,
     isLoading: isPrimaryLoading,
-  } = useSpectrogramData(fileId)
+  } = useSpectrogramData(fileId, transforms)
   const {
     data: comparisonData,
     errorMessage: comparisonErrorMessage,
