@@ -73,7 +73,10 @@
 .sectionHeader,
 .emptySelection,
 .state,
-.detailsBlock {
+.detailsBlock,
+.welcomeIntro,
+.welcomeStepBody,
+.welcomeCard {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -111,6 +114,88 @@
 .stateCopy {
   font-size: 0.95rem;
   line-height: 1.6;
+}
+
+.welcomeState {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1.25rem;
+  justify-content: center;
+  padding: clamp(1rem, 2vw, 1.75rem) 0.25rem 0.5rem;
+}
+
+.welcomeHero {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1.15rem, 2vw, 1.6rem);
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 1.6rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 248, 248, 0.92)),
+    radial-gradient(circle at top left, rgba(17, 24, 39, 0.032), transparent 42%);
+  box-shadow: 0 24px 40px -36px rgba(15, 23, 42, 0.22);
+}
+
+.welcomeSteps {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.welcomeStep {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(17, 24, 39, 0.06);
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.welcomeStepNumber {
+  display: inline-flex;
+  width: 1.65rem;
+  height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.94);
+  color: white;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.welcomeStepTitle,
+.welcomeCardTitle {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-foreground);
+}
+
+.welcomeStepCopy,
+.welcomeCardCopy {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--color-muted-foreground);
+}
+
+.welcomeGrid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.welcomeCard {
+  padding: 1rem 1.05rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 1.2rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(249, 249, 249, 0.88)),
+    radial-gradient(circle at top, rgba(0, 0, 0, 0.012), transparent 58%);
 }
 
 .fileList,
@@ -615,6 +700,10 @@
     padding-top: 0.75rem;
     border-top: 1px solid var(--color-border);
   }
+
+  .welcomeState {
+    padding-inline: 0;
+  }
 }
 
 @media (max-height: 860px) {
@@ -644,6 +733,15 @@
 @media (min-width: 768px) {
   .metricRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .welcomeHero {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.95fr);
+    align-items: start;
+  }
+
+  .welcomeGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

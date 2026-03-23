@@ -148,7 +148,7 @@ export function WorkspaceShell() {
             <div className="flex items-center gap-2 text-sm font-medium text-foreground">
               <ActivitySquare className="size-4 text-foreground" />
               <span className={cn(isCollapsed ? 'md:hidden' : 'inline')}>
-                App shell ready
+                Ready to analyze
               </span>
             </div>
           </div>

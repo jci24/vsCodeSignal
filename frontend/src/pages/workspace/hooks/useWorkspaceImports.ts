@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { ApiError } from '@/api/client'
+import { workspaceImportedEventName } from '@/features/import/utils/workspaceImportEvents'
 
 import { workspaceService } from '../service/workspaceService'
 import type {
@@ -19,19 +20,33 @@ export const useWorkspaceImports = () => {
   const [searchParams, setSearchParams] = useSearchParams()
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [workspace, setWorkspace] = useState<IWorkspaceImportsResponse | null>(null)
+  const workspaceRef = useRef<IWorkspaceImportsResponse | null>(null)
 
   const requestedBatchId = searchParams.get('batch')
   const requestedFileId = searchParams.get('file')
   const refreshKey = searchParams.get('refresh')
 
+  useEffect(() => {
+    workspaceRef.current = workspace
+  }, [workspace])
+
   const loadWorkspaceImports = useCallback(async (): Promise<void> => {
-    setIsLoading(true)
+    const isInitialLoad = workspaceRef.current === null
+
+    if (isInitialLoad) {
+      setIsLoading(true)
+    } else {
+      setIsRefreshing(true)
+    }
+
     setErrorMessage(null)
 
     try {
       const result = await workspaceService.getCurrentImports()
       setWorkspace(result)
+      workspaceRef.current = result
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message)
@@ -40,12 +55,25 @@ export const useWorkspaceImports = () => {
       }
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }, [])
 
   useEffect(() => {
     void loadWorkspaceImports()
   }, [loadWorkspaceImports, refreshKey])
+
+  useEffect(() => {
+    function handleWorkspaceImported(): void {
+      void loadWorkspaceImports()
+    }
+
+    window.addEventListener(workspaceImportedEventName, handleWorkspaceImported)
+
+    return () => {
+      window.removeEventListener(workspaceImportedEventName, handleWorkspaceImported)
+    }
+  }, [loadWorkspaceImports])
 
   const selection = useMemo<IWorkspaceSelection>(() => {
     if (!workspace || workspace.batches.length === 0) {
@@ -105,6 +133,7 @@ export const useWorkspaceImports = () => {
     failedFileCount: workspace?.failedFileCount ?? 0,
     importedFileCount: workspace?.importedFileCount ?? 0,
     isLoading,
+    isRefreshing,
     reloadWorkspace: loadWorkspaceImports,
     selectedBatch: selection.batch,
     selectedFile: selection.file,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import {
@@ -35,6 +35,11 @@ export const useWaveformData = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const transformKey = serializeTransformRecipe(transforms)
+  const transformsRef = useRef<ITransformRecipe | undefined>(transforms)
+
+  useEffect(() => {
+    transformsRef.current = transforms
+  }, [transformKey])
 
   useEffect(() => {
     if (!fileId) {
@@ -51,7 +56,7 @@ export const useWaveformData = (
       setErrorMessage(null)
 
       try {
-        const result = await fetchWaveform({ fileId, transforms })
+        const result = await fetchWaveform({ fileId, transforms: transformsRef.current })
 
         if (isCancelled) {
           return
@@ -80,7 +85,7 @@ export const useWaveformData = (
     return () => {
       isCancelled = true
     }
-  }, [fileId, transformKey, transforms])
+  }, [fileId, transformKey])
 
   return {
     data,
@@ -93,12 +98,17 @@ export const useWaveformSeriesData = (requests: IWaveformRequest[]) => {
   const [data, setData] = useState<IWaveformResponse[]>([])
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const requestsRef = useRef<IWaveformRequest[]>(requests)
   const requestsKey = requests
     .map((request) => `${request.fileId}:${serializeTransformRecipe(request.transforms)}`)
     .join('|')
 
   useEffect(() => {
-    if (requests.length === 0) {
+    requestsRef.current = requests
+  }, [requestsKey])
+
+  useEffect(() => {
+    if (requestsRef.current.length === 0) {
       setData([])
       setErrorMessage(null)
       setIsLoading(false)
@@ -112,7 +122,9 @@ export const useWaveformSeriesData = (requests: IWaveformRequest[]) => {
       setErrorMessage(null)
 
       try {
-        const result = await Promise.all(requests.map((request) => fetchWaveform(request)))
+        const result = await Promise.all(
+          requestsRef.current.map((request) => fetchWaveform(request)),
+        )
 
         if (isCancelled) {
           return
@@ -141,7 +153,7 @@ export const useWaveformSeriesData = (requests: IWaveformRequest[]) => {
     return () => {
       isCancelled = true
     }
-  }, [requests, requestsKey])
+  }, [requestsKey])
 
   return {
     data,

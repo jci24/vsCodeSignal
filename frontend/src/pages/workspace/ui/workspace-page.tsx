@@ -124,12 +124,80 @@ export function WorkspacePage(): JSX.Element {
 
   if (batches.length === 0) {
     return (
-      <div className={styles.state}>
-        <p className={styles.stateEyebrow}>Workspace</p>
-        <h3 className={styles.stateTitle}>No imports yet</h3>
-        <p className={styles.stateCopy}>
-          Import audio or signal files from the top-right action to start a workspace session.
-        </p>
+      <div className={styles.welcomeState}>
+        <section className={styles.welcomeHero}>
+          <div className={styles.welcomeIntro}>
+            <p className={styles.stateEyebrow}>Quick start</p>
+            <h3 className={styles.stateTitle}>Start with your first signal</h3>
+            <p className={styles.stateCopy}>
+              Use <strong>Import</strong> in the top-right corner to bring files into this
+              workspace. After that, pick a file on the left to inspect its waveform, FFT, or
+              spectrogram.
+            </p>
+          </div>
+
+          <div className={styles.welcomeSteps}>
+            <div className={styles.welcomeStep}>
+              <span className={styles.welcomeStepNumber}>1</span>
+              <div className={styles.welcomeStepBody}>
+                <strong className={styles.welcomeStepTitle}>Import one or more files</strong>
+                <p className={styles.welcomeStepCopy}>
+                  Start with a single run or load a small batch to compare later.
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.welcomeStep}>
+              <span className={styles.welcomeStepNumber}>2</span>
+              <div className={styles.welcomeStepBody}>
+                <strong className={styles.welcomeStepTitle}>Select a file from the rail</strong>
+                <p className={styles.welcomeStepCopy}>
+                  The selected file opens directly in the analysis view.
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.welcomeStep}>
+              <span className={styles.welcomeStepNumber}>3</span>
+              <div className={styles.welcomeStepBody}>
+                <strong className={styles.welcomeStepTitle}>Switch views and compare</strong>
+                <p className={styles.welcomeStepCopy}>
+                  Move between waveform, FFT, and spectrogram, then compare runs from the same
+                  workspace.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className={styles.welcomeGrid}>
+          <article className={styles.welcomeCard}>
+            <p className={styles.sectionEyebrow}>Analysis</p>
+            <h4 className={styles.welcomeCardTitle}>Inspect the same file three ways</h4>
+            <p className={styles.welcomeCardCopy}>
+              Waveform gives the time view, FFT shows frequency content, and spectrogram shows
+              how energy changes over time.
+            </p>
+          </article>
+
+          <article className={styles.welcomeCard}>
+            <p className={styles.sectionEyebrow}>Compare</p>
+            <h4 className={styles.welcomeCardTitle}>Check multiple runs side by side</h4>
+            <p className={styles.welcomeCardCopy}>
+              Once files are imported, use the checkboxes in the file rail to compare stacked,
+              grid, or overlay views.
+            </p>
+          </article>
+
+          <article className={styles.welcomeCard}>
+            <p className={styles.sectionEyebrow}>Workspace</p>
+            <h4 className={styles.welcomeCardTitle}>Keep one focused analysis session</h4>
+            <p className={styles.welcomeCardCopy}>
+              Imports stay in the current workspace so you can move between files, transforms,
+              and details without reloading them.
+            </p>
+          </article>
+        </section>
       </div>
     )
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import {
@@ -37,6 +37,11 @@ export const useSpectrogramData = (
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const transformKey = serializeTransformRecipe(transforms)
+  const transformsRef = useRef<ITransformRecipe | undefined>(transforms)
+
+  useEffect(() => {
+    transformsRef.current = transforms
+  }, [transformKey])
 
   useEffect(() => {
     if (!fileId) {
@@ -52,7 +57,7 @@ export const useSpectrogramData = (
       setErrorMessage(null)
 
       try {
-        const result = await fetchSpectrogram({ fileId, transforms })
+        const result = await fetchSpectrogram({ fileId, transforms: transformsRef.current })
 
         if (isCancelled) {
           return
@@ -81,7 +86,7 @@ export const useSpectrogramData = (
     return () => {
       isCancelled = true
     }
-  }, [fileId, transformKey, transforms])
+  }, [fileId, transformKey])
 
   return {
     data,

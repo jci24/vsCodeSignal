@@ -15,6 +15,7 @@ import type {
   IImportResponse,
   IImportSelection,
 } from '@/features/import/utils/types'
+import { dispatchWorkspaceImportedEvent } from '@/features/import/utils/workspaceImportEvents'
 
 export function useFileImport() {
   const navigate = useNavigate()
@@ -127,6 +128,10 @@ export function useFileImport() {
       setPathDraft('')
       setIsOpen(false)
       routeToWorkspace(result)
+      dispatchWorkspaceImportedEvent({
+        batchId: result.batchId,
+        fileId: result.importedFiles[0]?.id ?? null,
+      })
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message)
@@ -161,6 +166,10 @@ export function useFileImport() {
       appendImportHistory(nextSelection, result)
       setIsOpen(false)
       routeToWorkspace(result)
+      dispatchWorkspaceImportedEvent({
+        batchId: result.batchId,
+        fileId: result.importedFiles[0]?.id ?? null,
+      })
     } catch (error) {
       if (error instanceof ApiError) {
         setErrorMessage(error.message)

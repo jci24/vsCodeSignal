@@ -20,25 +20,29 @@ export const useCompareSelection = ({
     () => files.filter((file) => file.id !== primaryFileId),
     [files, primaryFileId],
   )
+  const comparableFileIds = useMemo(
+    () => comparableFiles.map((file) => file.id),
+    [comparableFiles],
+  )
   const compareFiles = useMemo(
     () =>
       comparableFiles.filter((file) => selectedComparisonIds.includes(file.id)),
     [comparableFiles, selectedComparisonIds],
   )
   const isCompareMode = compareFiles.length > 0
-  const comparableFileIdsKey = comparableFiles.map((file) => file.id).join('|')
+  const comparableFileIdsKey = comparableFileIds.join('|')
 
   useEffect(() => {
-    if (!primaryFileId || comparableFiles.length === 0) {
+    if (!primaryFileId || comparableFileIds.length === 0) {
       setSelectedComparisonIds((current) => (current.length === 0 ? current : []))
       return
     }
 
+    const comparableIdSet = new Set(comparableFileIds)
+
     setSelectedComparisonIds((current) =>
       {
-        const next = current.filter((fileId) =>
-          comparableFiles.some((file) => file.id === fileId),
-        )
+        const next = current.filter((fileId) => comparableIdSet.has(fileId))
 
         return next.length === current.length &&
           next.every((fileId, index) => fileId === current[index])
@@ -46,7 +50,7 @@ export const useCompareSelection = ({
           : next
       },
     )
-  }, [comparableFileIdsKey, comparableFiles, primaryFileId])
+  }, [comparableFileIdsKey, primaryFileId])
 
   const toggleComparisonFile = (fileId: string): void => {
     setSelectedComparisonIds((current) =>
