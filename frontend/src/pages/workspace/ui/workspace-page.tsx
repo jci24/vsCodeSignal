@@ -1,9 +1,10 @@
 import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
 import {
-  Gauge,
   CircleAlert,
   Database,
+  Filter,
+  Gauge,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
@@ -13,12 +14,15 @@ import {
 import { CompareControls } from '@/features/compare-mode/components/CompareControls/CompareControls'
 import { useCompareSelection } from '@/features/compare-mode/hooks/useCompareSelection'
 import { FftPanel } from '@/features/fft/components/FftPanel/FftPanel'
+import { FilteringPanel } from '@/features/filtering/components/FilteringPanel/FilteringPanel'
 import { MetricsPanel } from '@/features/metrics/components/MetricsPanel/MetricsPanel'
 import { SpectrogramPanel } from '@/features/spectrogram/components/SpectrogramPanel/SpectrogramPanel'
 import { TransformsPanel } from '@/features/transforms/components/TransformsPanel/TransformsPanel'
 import { useSignalTransforms } from '@/features/transforms/hooks/useSignalTransforms'
+import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { WaveformPanel } from '@/features/waveform/components/WaveformPanel/WaveformPanel'
 import { Button } from '@/shared/ui/button'
+import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 
 import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer/AudioPreviewPlayer'
 import { useWorkspaceImports } from '../hooks/useWorkspaceImports'
@@ -45,7 +49,7 @@ const ANALYSIS_TABS = [
 ] as const
 
 type AnalysisView = (typeof ANALYSIS_TABS)[number]['id']
-type SidebarPanel = 'details' | 'metrics' | 'transforms' | null
+type SidebarPanel = 'details' | 'filtering' | 'metrics' | 'transforms' | null
 
 export function WorkspacePage(): JSX.Element {
   const [activeView, setActiveView] = useState<AnalysisView>('waveform')
@@ -80,7 +84,9 @@ export function WorkspacePage(): JSX.Element {
   const {
     activeTransforms,
     hasActiveTransforms,
+    resetFiltering,
     resetTransforms,
+    setFilterRecipe,
     setGainDb,
     setNormalize,
     setTrimSilence,
@@ -98,11 +104,17 @@ export function WorkspacePage(): JSX.Element {
     }
   }, [selectedFile])
 
+  useEffect(() => {
+    if (selectedFile?.signalKind !== 'audio' && activeSidebarPanel && activeSidebarPanel !== 'details') {
+      setActiveSidebarPanel('details')
+    }
+  }, [activeSidebarPanel, selectedFile])
+
   if (isLoading) {
     return (
       <div className={styles.state}>
         <p className={styles.stateEyebrow}>Workspace</p>
-        <h3 className={styles.stateTitle}>Loading imports</h3>
+        <LoadingSpinner className={styles.loadingSpinner} label="Loading imports" size="lg" />
         <p className={styles.stateCopy}>
           Pulling the current workspace snapshot from the backend.
         </p>
@@ -219,15 +231,66 @@ export function WorkspacePage(): JSX.Element {
   const allowOverlay = activeView !== 'spectrogram'
   const effectiveLayout =
     isCompareMode && layoutMode === 'overlay' && !allowOverlay ? 'stack' : layoutMode
-  const useCompactCharts = isCompareMode && effectiveLayout !== 'overlay'
-  const analysisFiles = selectedFile
-    ? isCompareMode
-      ? [selectedFile, ...compareFiles]
-      : [selectedFile]
-    : []
   const selectedFileTransforms = selectedFile?.signalKind === 'audio' ? activeTransforms : undefined
+  const filterComparisonActive = Boolean(
+    selectedFile &&
+      !isCompareMode &&
+      selectedFileTransforms &&
+      selectedFileTransforms.filter.mode !== 'none',
+  )
+  const useFilterOverlay = filterComparisonActive && activeView !== 'spectrogram'
+  const useCompactCharts =
+    (isCompareMode && effectiveLayout !== 'overlay') || filterComparisonActive
+  const analysisEntries: IAnalysisEntry[] = selectedFile
+    ? isCompareMode
+      ? [
+          {
+            fileId: selectedFile.id,
+            key: `${selectedFile.id}:selected`,
+            title: selectedFile.sourcePath,
+            transforms: selectedFileTransforms,
+          },
+          ...compareFiles.map((file) => ({
+            fileId: file.id,
+            key: `${file.id}:compare`,
+            title: file.sourcePath,
+          })),
+        ]
+      : filterComparisonActive && !useFilterOverlay
+        ? [
+            {
+              fileId: selectedFile.id,
+              key: `${selectedFile.id}:original`,
+              title: 'Original',
+            },
+            {
+              fileId: selectedFile.id,
+              key: `${selectedFile.id}:filtered`,
+              title: 'Filtered',
+              transforms: selectedFileTransforms,
+            },
+          ]
+        : [
+            {
+              fileId: selectedFile.id,
+              key: `${selectedFile.id}:single`,
+              title: selectedFile.sourcePath,
+              transforms: selectedFileTransforms,
+            },
+          ]
+    : []
   const isSidebarOpen = activeSidebarPanel !== null
   const showCompareHint = Boolean(selectedFile && canCompare)
+  const inspectTabs =
+    selectedFile?.signalKind === 'audio'
+      ? [
+          { icon: PanelRightOpen, id: 'details' as const, label: 'Details' },
+          { icon: Gauge, id: 'metrics' as const, label: 'Metrics' },
+          { icon: SlidersHorizontal, id: 'transforms' as const, label: 'Transforms' },
+          { icon: Filter, id: 'filtering' as const, label: 'Filtering' },
+        ]
+      : [{ icon: PanelRightOpen, id: 'details' as const, label: 'Details' }]
+  const activeInspectTab = inspectTabs.find((tab) => tab.id === activeSidebarPanel) ?? inspectTabs[0]
 
   return (
     <div className={styles.root} data-compare={isCompareMode ? 'true' : 'false'}>
@@ -319,9 +382,9 @@ export function WorkspacePage(): JSX.Element {
                       <p className={styles.sectionEyebrow}>
                         {isCompareMode ? 'Compare view' : 'Selected file'}
                       </p>
-                      <h3 className={styles.previewTitle}>
-                        {isCompareMode ? 'Compared signals' : selectedFile.sourcePath}
-                      </h3>
+                      {!isCompareMode ? (
+                        <h3 className={styles.previewTitle}>{selectedFile.sourcePath}</h3>
+                      ) : null}
                     </div>
 
                     <div className={styles.analysisToolbar}>
@@ -359,65 +422,23 @@ export function WorkspacePage(): JSX.Element {
                       ) : null}
 
                       <div className={styles.sidebarActions}>
-                        {selectedFile.signalKind === 'audio' ? (
-                          <Button
-                            aria-pressed={activeSidebarPanel === 'metrics'}
-                            className={styles.sidebarToggle}
-                            data-open={activeSidebarPanel === 'metrics'}
-                            onClick={() =>
-                              setActiveSidebarPanel((current) =>
-                                current === 'metrics' ? null : 'metrics',
-                              )
-                            }
-                            type="button"
-                            variant="outline"
-                          >
-                            <Gauge className="size-4" />
-                            Metrics
-                          </Button>
-                        ) : null}
-
-                        {selectedFile.signalKind === 'audio' ? (
-                          <Button
-                            aria-pressed={activeSidebarPanel === 'transforms'}
-                            className={styles.sidebarToggle}
-                            data-open={activeSidebarPanel === 'transforms'}
-                            onClick={() =>
-                              setActiveSidebarPanel((current) =>
-                                current === 'transforms' ? null : 'transforms',
-                              )
-                            }
-                            type="button"
-                            variant="outline"
-                          >
-                            <SlidersHorizontal className="size-4" />
-                            Transforms
-                          </Button>
-                        ) : null}
-
                         <Button
-                          aria-label={
-                            activeSidebarPanel === 'details'
-                              ? 'Hide file details'
-                              : 'Show file details'
-                          }
-                          aria-pressed={activeSidebarPanel === 'details'}
+                          aria-label={isSidebarOpen ? 'Hide inspect panel' : 'Show inspect panel'}
+                          aria-pressed={isSidebarOpen}
                           className={styles.sidebarToggle}
-                          data-open={activeSidebarPanel === 'details'}
+                          data-open={isSidebarOpen}
                           onClick={() =>
-                            setActiveSidebarPanel((current) =>
-                              current === 'details' ? null : 'details',
-                            )
+                            setActiveSidebarPanel((current) => (current ? null : 'details'))
                           }
                           type="button"
                           variant="outline"
                         >
-                          {activeSidebarPanel === 'details' ? (
+                          {isSidebarOpen ? (
                             <PanelRightClose className="size-4" />
                           ) : (
                             <PanelRightOpen className="size-4" />
                           )}
-                          Details
+                          Inspect
                         </Button>
                       </div>
                     </div>
@@ -434,20 +455,40 @@ export function WorkspacePage(): JSX.Element {
                       {selectedFile.signalKind === 'audio' ? (
                         <div
                           className={styles.analysisCollection}
-                          data-layout={isCompareMode ? effectiveLayout : 'single'}
+                          data-layout={
+                            isCompareMode
+                              ? effectiveLayout
+                              : filterComparisonActive && !useFilterOverlay
+                                ? 'stack'
+                                : 'single'
+                          }
                         >
-                          {isCompareMode && effectiveLayout === 'overlay' ? (
+                          {(isCompareMode && effectiveLayout === 'overlay') || useFilterOverlay ? (
                             <article className={styles.analysisItem} key="overlay">
-                              <div className={styles.analysisItemHeader}>
-                                <p className={styles.analysisItemEyebrow}>Overlay</p>
-                                <h4 className={styles.analysisItemTitle}>
-                                  {analysisFiles.length} files on one chart
-                                </h4>
-                              </div>
+                              {isCompareMode ? (
+                                <div className={styles.analysisItemHeader}>
+                                  <p className={styles.analysisItemEyebrow}>Overlay</p>
+                                  <h4 className={styles.analysisItemTitle}>
+                                    {analysisEntries.length} files on one chart
+                                  </h4>
+                                </div>
+                              ) : null}
 
                               {activeView === 'waveform' ? (
                                 <WaveformPanel
                                   comparisonFileIds={compareFiles.map((file) => file.id)}
+                                  comparisonRequests={
+                                    useFilterOverlay
+                                      ? [
+                                          { fileId: selectedFile.id, label: 'Original' },
+                                          {
+                                            fileId: selectedFile.id,
+                                            label: 'Filtered',
+                                            transforms: selectedFileTransforms,
+                                          },
+                                        ]
+                                      : undefined
+                                  }
                                   fileId={selectedFile.id}
                                   transforms={selectedFileTransforms}
                                 />
@@ -455,18 +496,30 @@ export function WorkspacePage(): JSX.Element {
                               {activeView === 'fft' ? (
                                 <FftPanel
                                   comparisonFileIds={compareFiles.map((file) => file.id)}
+                                  comparisonRequests={
+                                    useFilterOverlay
+                                      ? [
+                                          { fileId: selectedFile.id, label: 'Original' },
+                                          {
+                                            fileId: selectedFile.id,
+                                            label: 'Filtered',
+                                            transforms: selectedFileTransforms,
+                                          },
+                                        ]
+                                      : undefined
+                                  }
                                   fileId={selectedFile.id}
                                   transforms={selectedFileTransforms}
                                 />
                               ) : null}
                             </article>
                           ) : (
-                            analysisFiles.map((file, index) => (
-                              <article className={styles.analysisItem} key={file.id}>
-                                {isCompareMode ? (
+                            analysisEntries.map((entry) => (
+                              <article className={styles.analysisItem} key={entry.key}>
+                                {isCompareMode || filterComparisonActive ? (
                                   <div className={styles.analysisItemHeader}>
                                     <h4 className={styles.analysisItemTitle}>
-                                      {file.sourcePath}
+                                      {entry.title}
                                     </h4>
                                   </div>
                                 ) : null}
@@ -474,22 +527,22 @@ export function WorkspacePage(): JSX.Element {
                                 {activeView === 'waveform' ? (
                                   <WaveformPanel
                                     compact={useCompactCharts}
-                                    fileId={file.id}
-                                    transforms={index === 0 ? selectedFileTransforms : undefined}
+                                    fileId={entry.fileId}
+                                    transforms={entry.transforms}
                                   />
                                 ) : null}
                                 {activeView === 'fft' ? (
                                   <FftPanel
                                     compact={useCompactCharts}
-                                    fileId={file.id}
-                                    transforms={index === 0 ? selectedFileTransforms : undefined}
+                                    fileId={entry.fileId}
+                                    transforms={entry.transforms}
                                   />
                                 ) : null}
                                 {activeView === 'spectrogram' ? (
                                   <SpectrogramPanel
                                     compact={useCompactCharts}
-                                    fileId={file.id}
-                                    transforms={index === 0 ? selectedFileTransforms : undefined}
+                                    fileId={entry.fileId}
+                                    transforms={entry.transforms}
                                   />
                                 ) : null}
                               </article>
@@ -517,52 +570,84 @@ export function WorkspacePage(): JSX.Element {
 
                 {activeSidebarPanel ? (
                   <aside className={styles.detailsSidebar}>
-                    {activeSidebarPanel === 'details' ? (
-                      <>
-                        <div className={styles.sectionHeader}>
-                          <p className={styles.sectionEyebrow}>File details</p>
-                        </div>
+                    <div className={styles.inspectHeader}>
+                      <p className={styles.sectionEyebrow}>Inspect</p>
+                      <h4 className={styles.inspectTitle}>{activeInspectTab.label}</h4>
+                    </div>
 
-                        {detailItems.length > 0 ? (
-                          <div className={styles.metricColumn}>
-                            {detailItems.map((item) => (
-                              <div className={styles.metric} key={item.label}>
-                                <span className={styles.metricLabel}>{item.label}</span>
-                                <strong className={styles.metricValue}>{item.value}</strong>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
+                    <div aria-label="Inspect panels" className={styles.inspectTabs} role="tablist">
+                      {inspectTabs.map((tab) => {
+                        const Icon = tab.icon
 
-                        {metadataEntries.length > 0 ? (
-                          <div className={styles.detailsBlock}>
-                            <dl className={styles.detailList}>
-                              {metadataEntries.map(([key, value]) => (
-                                <DetailRow key={key} label={toTitleCase(key)} value={value} />
+                        return (
+                          <button
+                            aria-selected={activeSidebarPanel === tab.id}
+                            className={styles.inspectTab}
+                            data-active={activeSidebarPanel === tab.id}
+                            key={tab.id}
+                            onClick={() => setActiveSidebarPanel(tab.id)}
+                            role="tab"
+                            type="button"
+                          >
+                            <Icon className="size-4" />
+                            {tab.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <div className={styles.inspectContent}>
+                      {activeSidebarPanel === 'details' ? (
+                        <>
+                          {detailItems.length > 0 ? (
+                            <div className={styles.metricColumn}>
+                              {detailItems.map((item) => (
+                                <div className={styles.metric} key={item.label}>
+                                  <span className={styles.metricLabel}>{item.label}</span>
+                                  <strong className={styles.metricValue}>{item.value}</strong>
+                                </div>
                               ))}
-                            </dl>
-                          </div>
-                        ) : null}
-                      </>
-                    ) : null}
+                            </div>
+                          ) : null}
 
-                    {activeSidebarPanel === 'transforms' && selectedFile.signalKind === 'audio' ? (
-                      <TransformsPanel
-                        hasActiveTransforms={hasActiveTransforms}
-                        onGainDbChange={setGainDb}
-                        onNormalizeChange={setNormalize}
-                        onReset={resetTransforms}
-                        onTrimSilenceChange={setTrimSilence}
-                        transforms={activeTransforms}
-                      />
-                    ) : null}
+                          {metadataEntries.length > 0 ? (
+                            <div className={styles.detailsBlock}>
+                              <dl className={styles.detailList}>
+                                {metadataEntries.map(([key, value]) => (
+                                  <DetailRow key={key} label={toTitleCase(key)} value={value} />
+                                ))}
+                              </dl>
+                            </div>
+                          ) : null}
+                        </>
+                      ) : null}
 
-                    {activeSidebarPanel === 'metrics' && selectedFile.signalKind === 'audio' ? (
-                      <MetricsPanel
-                        fileId={selectedFile.id}
-                        transforms={selectedFileTransforms}
-                      />
-                    ) : null}
+                      {activeSidebarPanel === 'transforms' && selectedFile.signalKind === 'audio' ? (
+                        <TransformsPanel
+                          hasActiveTransforms={hasActiveTransforms}
+                          onGainDbChange={setGainDb}
+                          onNormalizeChange={setNormalize}
+                          onReset={resetTransforms}
+                          onTrimSilenceChange={setTrimSilence}
+                          transforms={activeTransforms}
+                        />
+                      ) : null}
+
+                      {activeSidebarPanel === 'metrics' && selectedFile.signalKind === 'audio' ? (
+                        <MetricsPanel
+                          fileId={selectedFile.id}
+                          transforms={selectedFileTransforms}
+                        />
+                      ) : null}
+
+                      {activeSidebarPanel === 'filtering' && selectedFile.signalKind === 'audio' ? (
+                        <FilteringPanel
+                          onApply={setFilterRecipe}
+                          onReset={resetFiltering}
+                          transforms={activeTransforms}
+                        />
+                      ) : null}
+                    </div>
                   </aside>
                 ) : null}
               </div>
@@ -590,6 +675,13 @@ interface IDetailItem {
 interface IDetailRowProps {
   label: string
   value: string
+}
+
+interface IAnalysisEntry {
+  fileId: string
+  key: string
+  title: string
+  transforms?: ITransformRecipe
 }
 
 function DetailRow({ label, value }: IDetailRowProps): JSX.Element {

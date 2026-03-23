@@ -1,0 +1,91 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 0.15rem;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.blockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+
+.fieldHint {
+  display: block;
+  margin-top: 0.18rem;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--color-muted-foreground);
+}
+
+.modeSelect {
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--color-foreground);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-size: 0.84rem;
+}
+
+.slider {
+  width: 100%;
+  accent-color: #111827;
+}
+
+.sliderValue {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+}
+
+@media (max-width: 767px) {
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

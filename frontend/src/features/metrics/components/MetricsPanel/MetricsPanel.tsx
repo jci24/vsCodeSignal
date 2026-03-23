@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 
 import type { ITransformRecipe } from '@/features/transforms/utils/types'
+import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 
 import { useMetricsData } from '../../hooks/useMetricsData'
 import styles from './MetricsPanel.module.scss'
@@ -17,7 +18,7 @@ export function MetricsPanel({ fileId, transforms }: MetricsPanelProps): JSX.Ele
     return (
       <div className={styles.state}>
         <p className={styles.eyebrow}>Metrics</p>
-        <h4 className={styles.stateTitle}>Calculating signal metrics</h4>
+        <LoadingSpinner className={styles.loadingSpinner} label="Calculating signal metrics" />
         <p className={styles.stateCopy}>Computing RMS, peak, crest factor, and dominant frequency.</p>
       </div>
     )
