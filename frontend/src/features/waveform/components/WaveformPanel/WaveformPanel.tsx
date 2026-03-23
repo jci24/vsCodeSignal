@@ -3,12 +3,18 @@ import { useMemo } from 'react'
 
 import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { AnalysisLineChart } from '@/shared/charts/AnalysisLineChart'
+import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 
 import { useWaveformData, useWaveformSeriesData } from '../../hooks/useWaveformData'
 import styles from './WaveformPanel.module.scss'
 
 interface WaveformPanelProps {
   comparisonFileIds?: string[]
+  comparisonRequests?: Array<{
+    fileId: string
+    label: string
+    transforms?: ITransformRecipe
+  }>
   compact?: boolean
   fileId: string
   transforms?: ITransformRecipe
@@ -16,16 +22,19 @@ interface WaveformPanelProps {
 
 export function WaveformPanel({
   comparisonFileIds = [],
+  comparisonRequests = [],
   compact = false,
   fileId,
   transforms,
 }: WaveformPanelProps): JSX.Element {
   const overlayRequests = useMemo(
     () =>
-      comparisonFileIds.length > 0
+      comparisonRequests.length > 0
+        ? comparisonRequests
+        : comparisonFileIds.length > 0
         ? [{ fileId, transforms }, ...comparisonFileIds.map((comparisonFileId) => ({ fileId: comparisonFileId }))]
         : [],
-    [comparisonFileIds, fileId, transforms],
+    [comparisonFileIds, comparisonRequests, fileId, transforms],
   )
   const {
     data: primaryData,
@@ -42,7 +51,7 @@ export function WaveformPanel({
   if (isPrimaryLoading || (overlayRequests.length > 0 ? isSeriesLoading : false)) {
     return (
       <div className={styles.state}>
-        <p className={styles.stateTitle}>Loading waveform</p>
+        <LoadingSpinner className={styles.loadingSpinner} label="Loading waveform" />
         <p className={styles.stateCopy}>Preparing the time-domain view.</p>
       </div>
     )
@@ -99,14 +108,14 @@ export function WaveformPanel({
         <div className={styles.compareLegend}>
           {chartSeries.map((entry, index) => (
             <span className={styles.legendItem} key={entry.id}>
-              <span
-                className={styles.legendSwatch}
-                style={{ background: colorScale[index % colorScale.length] }}
-              />
-              {index === 0 ? 'Selected' : entry.name}
-            </span>
-          ))}
-        </div>
+                  <span
+                    className={styles.legendSwatch}
+                    style={{ background: colorScale[index % colorScale.length] }}
+                  />
+                  {comparisonRequests[index]?.label ?? (index === 0 ? 'Selected' : entry.name)}
+                </span>
+              ))}
+            </div>
       ) : null}
 
       <AnalysisLineChart

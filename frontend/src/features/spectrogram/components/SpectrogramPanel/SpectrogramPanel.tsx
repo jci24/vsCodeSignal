@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 
 import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { AnalysisHeatmapChart } from '@/shared/charts/AnalysisHeatmapChart'
+import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 
 import { useSpectrogramData } from '../../hooks/useSpectrogramData'
 import styles from './SpectrogramPanel.module.scss'
@@ -48,7 +49,7 @@ export function SpectrogramPanel({
   if (isPrimaryLoading || (comparisonFileId ? isComparisonLoading : false)) {
     return (
       <div className={styles.state}>
-        <p className={styles.stateTitle}>Loading spectrogram</p>
+        <LoadingSpinner className={styles.loadingSpinner} label="Loading spectrogram" />
         <p className={styles.stateCopy}>Preparing the time-frequency view.</p>
       </div>
     )

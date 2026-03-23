@@ -13,6 +13,7 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
     private const int SpectrogramHopSize = 256;
     private const int MaxSpectrogramFrames = 120;
     private const int MaxSpectrogramBins = 96;
+    private const double MinimumFilterCutoffHz = 20d;
     private const float TrimSilenceThresholdDb = -42f;
     private static readonly TimeSpan DecodeTimeout = TimeSpan.FromSeconds(20);
 
@@ -96,6 +97,9 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
 
         if (transforms.TrimSilence)
             samples = TrimSilence(samples);
+
+        if (HasActiveFilter(transforms.Filter))
+            samples = ApplyFilter(samples, signal.SampleRate, transforms.Filter);
 
         if (transforms.Normalize)
             samples = Normalize(samples);
@@ -317,6 +321,199 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
         return trimmed;
     }
 
+    private static bool HasActiveFilter(SignalFilterRecipe? filter)
+    {
+        if (filter is null)
+            return false;
+
+        return NormalizeFilterMode(filter.Mode) is not "none";
+    }
+
+    private static float[] ApplyFilter(float[] samples, int sampleRate, SignalFilterRecipe filter)
+    {
+        if (samples.Length == 0)
+            return samples;
+
+        var mode = NormalizeFilterMode(filter.Mode);
+        BiquadCoefficients coefficients;
+
+        switch (mode)
+        {
+            case "lowpass":
+                coefficients = CreateLowPassCoefficients(sampleRate, filter.CutoffHz, filter.Q);
+                break;
+            case "highpass":
+                coefficients = CreateHighPassCoefficients(sampleRate, filter.CutoffHz, filter.Q);
+                break;
+            case "bandpass":
+                coefficients = CreateBandPassCoefficients(
+                    sampleRate,
+                    filter.LowCutoffHz,
+                    filter.HighCutoffHz);
+                break;
+            case "notch":
+                coefficients = CreateNotchCoefficients(sampleRate, filter.CutoffHz, filter.Q);
+                break;
+            default:
+                return samples;
+        }
+
+        return ApplyBiquad(samples, coefficients);
+    }
+
+    private static string NormalizeFilterMode(string? mode) =>
+        string.IsNullOrWhiteSpace(mode)
+            ? "none"
+            : mode.Trim().ToLowerInvariant();
+
+    private static BiquadCoefficients CreateLowPassCoefficients(
+        int sampleRate,
+        double cutoffHz,
+        double q)
+    {
+        var frequency = ClampCutoff(cutoffHz, sampleRate);
+        var quality = ClampQ(q);
+        var omega = 2d * Math.PI * frequency / sampleRate;
+        var cosOmega = Math.Cos(omega);
+        var alpha = Math.Sin(omega) / (2d * quality);
+        var b0 = (1d - cosOmega) / 2d;
+        var b1 = 1d - cosOmega;
+        var b2 = (1d - cosOmega) / 2d;
+        var a0 = 1d + alpha;
+        var a1 = -2d * cosOmega;
+        var a2 = 1d - alpha;
+
+        return NormalizeCoefficients(b0, b1, b2, a0, a1, a2);
+    }
+
+    private static BiquadCoefficients CreateHighPassCoefficients(
+        int sampleRate,
+        double cutoffHz,
+        double q)
+    {
+        var frequency = ClampCutoff(cutoffHz, sampleRate);
+        var quality = ClampQ(q);
+        var omega = 2d * Math.PI * frequency / sampleRate;
+        var cosOmega = Math.Cos(omega);
+        var alpha = Math.Sin(omega) / (2d * quality);
+        var b0 = (1d + cosOmega) / 2d;
+        var b1 = -(1d + cosOmega);
+        var b2 = (1d + cosOmega) / 2d;
+        var a0 = 1d + alpha;
+        var a1 = -2d * cosOmega;
+        var a2 = 1d - alpha;
+
+        return NormalizeCoefficients(b0, b1, b2, a0, a1, a2);
+    }
+
+    private static BiquadCoefficients CreateBandPassCoefficients(
+        int sampleRate,
+        double lowCutoffHz,
+        double highCutoffHz)
+    {
+        var (low, high) = ClampBand(lowCutoffHz, highCutoffHz, sampleRate);
+        var centerFrequency = Math.Sqrt(low * high);
+        var quality = ClampQ(centerFrequency / Math.Max(high - low, 1d));
+        var omega = 2d * Math.PI * centerFrequency / sampleRate;
+        var cosOmega = Math.Cos(omega);
+        var alpha = Math.Sin(omega) / (2d * quality);
+        var b0 = alpha;
+        var b1 = 0d;
+        var b2 = -alpha;
+        var a0 = 1d + alpha;
+        var a1 = -2d * cosOmega;
+        var a2 = 1d - alpha;
+
+        return NormalizeCoefficients(b0, b1, b2, a0, a1, a2);
+    }
+
+    private static BiquadCoefficients CreateNotchCoefficients(
+        int sampleRate,
+        double cutoffHz,
+        double q)
+    {
+        var frequency = ClampCutoff(cutoffHz, sampleRate);
+        var quality = ClampQ(q);
+        var omega = 2d * Math.PI * frequency / sampleRate;
+        var cosOmega = Math.Cos(omega);
+        var alpha = Math.Sin(omega) / (2d * quality);
+        var b0 = 1d;
+        var b1 = -2d * cosOmega;
+        var b2 = 1d;
+        var a0 = 1d + alpha;
+        var a1 = -2d * cosOmega;
+        var a2 = 1d - alpha;
+
+        return NormalizeCoefficients(b0, b1, b2, a0, a1, a2);
+    }
+
+    private static double ClampCutoff(double cutoffHz, int sampleRate)
+    {
+        var maximum = Math.Max(MinimumFilterCutoffHz * 2d, (sampleRate / 2d) * 0.95d);
+        return Math.Clamp(cutoffHz, MinimumFilterCutoffHz, maximum);
+    }
+
+    private static (double Low, double High) ClampBand(
+        double lowCutoffHz,
+        double highCutoffHz,
+        int sampleRate)
+    {
+        var low = ClampCutoff(lowCutoffHz, sampleRate);
+        var high = ClampCutoff(highCutoffHz, sampleRate);
+
+        if (high <= low)
+            high = Math.Min((sampleRate / 2d) * 0.95d, low + 50d);
+
+        if (high <= low)
+            low = Math.Max(MinimumFilterCutoffHz, high - 50d);
+
+        return (low, high);
+    }
+
+    private static double ClampQ(double q) => Math.Clamp(q, 0.35d, 18d);
+
+    private static BiquadCoefficients NormalizeCoefficients(
+        double b0,
+        double b1,
+        double b2,
+        double a0,
+        double a1,
+        double a2) =>
+        new(
+            b0 / a0,
+            b1 / a0,
+            b2 / a0,
+            a1 / a0,
+            a2 / a0);
+
+    private static float[] ApplyBiquad(float[] samples, BiquadCoefficients coefficients)
+    {
+        var transformed = new float[samples.Length];
+        double x1 = 0d;
+        double x2 = 0d;
+        double y1 = 0d;
+        double y2 = 0d;
+
+        for (var index = 0; index < samples.Length; index++)
+        {
+            var input = samples[index];
+            var output =
+                (coefficients.B0 * input) +
+                (coefficients.B1 * x1) +
+                (coefficients.B2 * x2) -
+                (coefficients.A1 * y1) -
+                (coefficients.A2 * y2);
+
+            transformed[index] = (float)output;
+            x2 = x1;
+            x1 = input;
+            y2 = y1;
+            y1 = output;
+        }
+
+        return transformed;
+    }
+
     private static List<SpectrumBin> ComputeMagnitudeSpectrum(float[] samples, int sampleRate)
     {
         var size = NextPowerOfTwo(samples.Length);
@@ -461,6 +658,8 @@ public sealed record SpectrogramAnalysis(
     IReadOnlyList<SpectrogramCell> Cells);
 
 public sealed record SpectrogramCell(int TimeIndex, int FrequencyIndex, double Intensity);
+
+internal sealed record BiquadCoefficients(double B0, double B1, double B2, double A1, double A2);
 
 public sealed record SignalMetrics(
     double Rms,

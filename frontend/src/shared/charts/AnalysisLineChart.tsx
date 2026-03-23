@@ -127,11 +127,11 @@ export function AnalysisLineChart({
         },
       ],
       grid: {
-        bottom: compact ? 26 : 34,
+        bottom: compact ? 20 : 34,
         containLabel: true,
-        left: compact ? 40 : 28,
+        left: compact ? 36 : 28,
         right: 18,
-        top: compact ? 12 : 24,
+        top: compact ? 8 : 24,
       },
       series: series.map((entry) => ({
         data: entry.points.map((point) => [point.x, point.y]),
@@ -173,11 +173,11 @@ export function AnalysisLineChart({
         axisLabel: {
           color: '#6b7280',
           fontFamily: 'IBM Plex Sans, sans-serif',
-          fontSize: compact ? 10 : 11,
+          fontSize: compact ? 9 : 11,
           hideOverlap: true,
           formatter: (value: number | string) =>
             xAxisFormatter ? xAxisFormatter(Number(value)) : String(value),
-          margin: compact ? 8 : 12,
+          margin: compact ? 6 : 12,
         },
         axisLine: {
           lineStyle: {
@@ -196,11 +196,11 @@ export function AnalysisLineChart({
         axisLabel: {
           color: '#6b7280',
           fontFamily: 'IBM Plex Sans, sans-serif',
-          fontSize: compact ? 10 : 11,
+          fontSize: compact ? 9 : 11,
           hideOverlap: true,
           formatter: (value: number | string) =>
             yAxisFormatter ? yAxisFormatter(Number(value)) : String(value),
-          margin: compact ? 8 : 12,
+          margin: compact ? 6 : 12,
         },
         axisLine: {
           lineStyle: {

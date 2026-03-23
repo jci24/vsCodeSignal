@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
-import { LoaderCircle } from 'lucide-react'
+
+import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 
 import styles from './ImportProgress.module.scss'
 
@@ -7,9 +8,8 @@ export const ImportProgress = (): JSX.Element => {
   return (
     <div className={styles.root}>
       <div className={styles.icon}>
-        <LoaderCircle className="size-5 animate-spin" />
+        <LoadingSpinner label="Importing files" size="lg" />
       </div>
-      <p className={styles.label}>Importing...</p>
     </div>
   )
 }

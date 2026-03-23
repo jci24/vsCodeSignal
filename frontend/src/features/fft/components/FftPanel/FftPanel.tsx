@@ -3,12 +3,18 @@ import { useMemo, useState } from 'react'
 
 import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { AnalysisLineChart } from '@/shared/charts/AnalysisLineChart'
+import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 
 import { useFftData, useFftSeriesData } from '../../hooks/useFftData'
 import styles from './FftPanel.module.scss'
 
 interface FftPanelProps {
   comparisonFileIds?: string[]
+  comparisonRequests?: Array<{
+    fileId: string
+    label: string
+    transforms?: ITransformRecipe
+  }>
   compact?: boolean
   fileId: string
   transforms?: ITransformRecipe
@@ -18,6 +24,7 @@ type FrequencyScale = 'linear' | 'log'
 
 export function FftPanel({
   comparisonFileIds = [],
+  comparisonRequests = [],
   compact = false,
   fileId,
   transforms,
@@ -25,10 +32,12 @@ export function FftPanel({
   const [frequencyScale, setFrequencyScale] = useState<FrequencyScale>('linear')
   const overlayRequests = useMemo(
     () =>
-      comparisonFileIds.length > 0
+      comparisonRequests.length > 0
+        ? comparisonRequests
+        : comparisonFileIds.length > 0
         ? [{ fileId, transforms }, ...comparisonFileIds.map((comparisonFileId) => ({ fileId: comparisonFileId }))]
         : [],
-    [comparisonFileIds, fileId, transforms],
+    [comparisonFileIds, comparisonRequests, fileId, transforms],
   )
   const {
     data: primaryData,
@@ -72,7 +81,7 @@ export function FftPanel({
   if (isPrimaryLoading || (overlayRequests.length > 0 ? isSeriesLoading : false)) {
     return (
       <div className={styles.state}>
-        <p className={styles.stateTitle}>Loading FFT</p>
+        <LoadingSpinner className={styles.loadingSpinner} label="Loading FFT" />
         <p className={styles.stateCopy}>Preparing the frequency-domain view.</p>
       </div>
     )
@@ -134,7 +143,6 @@ export function FftPanel({
     <div className={styles.root}>
       <div className={styles.panelHeader}>
         <div className={styles.panelMeta}>
-          <p className={styles.panelLabel}>Magnitude (dB, peak = 0)</p>
           {isCompareMode ? (
             <div className={styles.compareLegend}>
               {chartSeries.map((entry, index) => (
@@ -143,7 +151,7 @@ export function FftPanel({
                     className={styles.legendSwatch}
                     style={{ background: colorScale[index % colorScale.length] }}
                   />
-                  {index === 0 ? 'Selected' : entry.name}
+                  {comparisonRequests[index]?.label ?? (index === 0 ? 'Selected' : entry.name)}
                 </span>
               ))}
             </div>
