@@ -1,6 +1,7 @@
 using VSCodeSignals.Api.Features.Import.Handlers;
 using VSCodeSignals.Api.Features.Import.Common;
 using VSCodeSignals.Api.Features.Fft.Handlers;
+using VSCodeSignals.Api.Features.Metrics.Handlers;
 using VSCodeSignals.Api.Features.Spectrogram.Handlers;
 using VSCodeSignals.Api.Features.Waveform.Handlers;
 using VSCodeSignals.Api.Features.Workspaces.Handler;
@@ -18,6 +19,7 @@ public static class DependencyInjection
         services.AddScoped<IImportAdapter, FfmpegAudioImportAdapter>();
         services.AddScoped<IImportAdapter, UffImportAdapter>();
         services.AddScoped<GetFftHandler>();
+        services.AddScoped<GetMetricsHandler>();
         services.AddScoped<GetSpectrogramHandler>();
         services.AddScoped<GetWaveformHandler>();
         services.AddScoped<ImportFilesHandler>();

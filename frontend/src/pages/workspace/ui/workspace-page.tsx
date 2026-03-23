@@ -1,6 +1,7 @@
 import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
 import {
+  Gauge,
   CircleAlert,
   Database,
   PanelRightClose,
@@ -12,6 +13,7 @@ import {
 import { CompareControls } from '@/features/compare-mode/components/CompareControls/CompareControls'
 import { useCompareSelection } from '@/features/compare-mode/hooks/useCompareSelection'
 import { FftPanel } from '@/features/fft/components/FftPanel/FftPanel'
+import { MetricsPanel } from '@/features/metrics/components/MetricsPanel/MetricsPanel'
 import { SpectrogramPanel } from '@/features/spectrogram/components/SpectrogramPanel/SpectrogramPanel'
 import { TransformsPanel } from '@/features/transforms/components/TransformsPanel/TransformsPanel'
 import { useSignalTransforms } from '@/features/transforms/hooks/useSignalTransforms'
@@ -43,7 +45,7 @@ const ANALYSIS_TABS = [
 ] as const
 
 type AnalysisView = (typeof ANALYSIS_TABS)[number]['id']
-type SidebarPanel = 'details' | 'transforms' | null
+type SidebarPanel = 'details' | 'metrics' | 'transforms' | null
 
 export function WorkspacePage(): JSX.Element {
   const [activeView, setActiveView] = useState<AnalysisView>('waveform')
@@ -225,6 +227,7 @@ export function WorkspacePage(): JSX.Element {
     : []
   const selectedFileTransforms = selectedFile?.signalKind === 'audio' ? activeTransforms : undefined
   const isSidebarOpen = activeSidebarPanel !== null
+  const showCompareHint = Boolean(selectedFile && canCompare)
 
   return (
     <div className={styles.root} data-compare={isCompareMode ? 'true' : 'false'}>
@@ -235,6 +238,11 @@ export function WorkspacePage(): JSX.Element {
         <aside className={styles.fileRail}>
           <div className={styles.sectionHeader}>
             <p className={styles.sectionEyebrow}>Files</p>
+            {showCompareHint ? (
+              <p className={styles.railHint}>
+                Tick files to compare them with the current selection.
+              </p>
+            ) : null}
           </div>
 
           <ul className={styles.fileList}>
@@ -259,6 +267,7 @@ export function WorkspacePage(): JSX.Element {
                   <button
                     className={styles.fileButton}
                     data-active={selectedFile?.id === file.id}
+                    data-compare-selected={isFileSelectedForCompare(file.id)}
                     onClick={() => selectFile(file.batchId, file.id)}
                     type="button"
                   >
@@ -311,9 +320,7 @@ export function WorkspacePage(): JSX.Element {
                         {isCompareMode ? 'Compare view' : 'Selected file'}
                       </p>
                       <h3 className={styles.previewTitle}>
-                        {isCompareMode
-                          ? `${analysisFiles.length} files`
-                          : selectedFile.sourcePath}
+                        {isCompareMode ? 'Compared signals' : selectedFile.sourcePath}
                       </h3>
                     </div>
 
@@ -352,6 +359,24 @@ export function WorkspacePage(): JSX.Element {
                       ) : null}
 
                       <div className={styles.sidebarActions}>
+                        {selectedFile.signalKind === 'audio' ? (
+                          <Button
+                            aria-pressed={activeSidebarPanel === 'metrics'}
+                            className={styles.sidebarToggle}
+                            data-open={activeSidebarPanel === 'metrics'}
+                            onClick={() =>
+                              setActiveSidebarPanel((current) =>
+                                current === 'metrics' ? null : 'metrics',
+                              )
+                            }
+                            type="button"
+                            variant="outline"
+                          >
+                            <Gauge className="size-4" />
+                            Metrics
+                          </Button>
+                        ) : null}
+
                         {selectedFile.signalKind === 'audio' ? (
                           <Button
                             aria-pressed={activeSidebarPanel === 'transforms'}
@@ -440,9 +465,6 @@ export function WorkspacePage(): JSX.Element {
                               <article className={styles.analysisItem} key={file.id}>
                                 {isCompareMode ? (
                                   <div className={styles.analysisItemHeader}>
-                                    <p className={styles.analysisItemEyebrow}>
-                                      {index === 0 ? 'Selected' : 'Compare'}
-                                    </p>
                                     <h4 className={styles.analysisItemTitle}>
                                       {file.sourcePath}
                                     </h4>
@@ -532,6 +554,13 @@ export function WorkspacePage(): JSX.Element {
                         onReset={resetTransforms}
                         onTrimSilenceChange={setTrimSilence}
                         transforms={activeTransforms}
+                      />
+                    ) : null}
+
+                    {activeSidebarPanel === 'metrics' && selectedFile.signalKind === 'audio' ? (
+                      <MetricsPanel
+                        fileId={selectedFile.id}
+                        transforms={selectedFileTransforms}
                       />
                     ) : null}
                   </aside>

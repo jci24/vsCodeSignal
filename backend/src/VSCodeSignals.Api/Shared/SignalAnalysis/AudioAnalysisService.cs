@@ -191,6 +191,42 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
         return new SpectrogramAnalysis(timeValues, frequencyValues, cells);
     }
 
+    public SignalMetrics BuildMetrics(DecodedAudioSignal signal)
+    {
+        if (signal.Samples.Length == 0)
+        {
+            return new SignalMetrics(0, 0, 0, 0, 0, signal.SampleRate, 0);
+        }
+
+        double squaredSum = 0;
+        var peak = 0d;
+
+        for (var index = 0; index < signal.Samples.Length; index++)
+        {
+            var sample = signal.Samples[index];
+            var absolute = Math.Abs(sample);
+            peak = Math.Max(peak, absolute);
+            squaredSum += sample * sample;
+        }
+
+        var rms = Math.Sqrt(squaredSum / signal.Samples.Length);
+        var crestFactor = rms > 1e-9 ? peak / rms : 0;
+        var durationSeconds = signal.Samples.Length / (double)signal.SampleRate;
+        var dominantBin = BuildSpectrum(signal)
+            .Where(bin => bin.FrequencyHz > 0)
+            .OrderByDescending(bin => bin.Magnitude)
+            .FirstOrDefault();
+
+        return new SignalMetrics(
+            rms,
+            peak,
+            crestFactor,
+            dominantBin?.FrequencyHz ?? 0,
+            dominantBin?.Magnitude ?? 0,
+            signal.SampleRate,
+            durationSeconds);
+    }
+
     private static List<double> BuildFrequencyAxis(int sampleRate, int fftSize, int binCount)
     {
         var axis = new List<double>(binCount);
@@ -425,3 +461,12 @@ public sealed record SpectrogramAnalysis(
     IReadOnlyList<SpectrogramCell> Cells);
 
 public sealed record SpectrogramCell(int TimeIndex, int FrequencyIndex, double Intensity);
+
+public sealed record SignalMetrics(
+    double Rms,
+    double Peak,
+    double CrestFactor,
+    double DominantFrequencyHz,
+    double DominantMagnitudeDb,
+    int SampleRate,
+    double DurationSeconds);

@@ -1,7 +1,7 @@
 .root {
   width: 100%;
-  min-height: 10.5rem;
-  height: clamp(10.5rem, 28vh, 16rem);
+  min-height: 14rem;
+  height: clamp(14rem, 40vh, 24rem);
   border-radius: 1.1rem;
   overflow: hidden;
 }
@@ -13,8 +13,8 @@
 
 @media (max-width: 767px) {
   .root {
-    min-height: 9rem;
-    height: clamp(9rem, 26vh, 12rem);
+    min-height: 10rem;
+    height: clamp(10rem, 28vh, 14rem);
   }
 
   .compact {
@@ -25,8 +25,8 @@
 
 @media (max-height: 860px) {
   .root {
-    min-height: 9.5rem;
-    height: clamp(9.5rem, 24vh, 13rem);
+    min-height: 11rem;
+    height: clamp(11rem, 30vh, 16rem);
   }
 
   .compact {

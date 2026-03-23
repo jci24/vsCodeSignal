@@ -107,11 +107,11 @@ export function AnalysisHeatmapChart({
       animation: false,
       backgroundColor: 'transparent',
       grid: {
-        bottom: 20,
+        bottom: compact ? 12 : 20,
         containLabel: true,
-        left: 18,
+        left: compact ? 44 : 34,
         right: 18,
-        top: 24,
+        top: compact ? 10 : 24,
       },
       series: [
         {
@@ -186,8 +186,10 @@ export function AnalysisHeatmapChart({
         axisLabel: {
           color: '#6b7280',
           fontFamily: 'IBM Plex Sans, sans-serif',
-          fontSize: 11,
+          fontSize: compact ? 10 : 11,
+          hideOverlap: true,
           formatter: (value: string) => formatSeconds(times[Number(value)] ?? 0),
+          margin: compact ? 8 : 12,
         },
         axisLine: {
           lineStyle: {
@@ -206,8 +208,10 @@ export function AnalysisHeatmapChart({
         axisLabel: {
           color: '#6b7280',
           fontFamily: 'IBM Plex Sans, sans-serif',
-          fontSize: 11,
+          fontSize: compact ? 10 : 11,
+          hideOverlap: true,
           formatter: (value: string) => formatFrequency(frequencies[Number(value)] ?? 0),
+          margin: compact ? 8 : 12,
         },
         axisLine: {
           lineStyle: {

@@ -21,6 +21,10 @@ export default defineConfig({
         changeOrigin: true,
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
       },
+      '/metrics': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
       '/spectrogram': {
         changeOrigin: true,
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
