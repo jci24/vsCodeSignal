@@ -13,6 +13,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api': {
+        changeOrigin: true,
+        target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',
+      },
       '/fft': {
         changeOrigin: true,
         target: process.env.VITE_BACKEND_PROXY_TARGET ?? 'http://localhost:5094',

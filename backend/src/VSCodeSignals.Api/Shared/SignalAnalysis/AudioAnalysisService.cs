@@ -199,11 +199,13 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
     {
         if (signal.Samples.Length == 0)
         {
-            return new SignalMetrics(0, 0, 0, 0, 0, signal.SampleRate, 0);
+            return new SignalMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, signal.SampleRate, 0);
         }
 
         double squaredSum = 0;
         var peak = 0d;
+        var overFullScaleCount = 0;
+        var nearFullScaleCount = 0;
 
         for (var index = 0; index < signal.Samples.Length; index++)
         {
@@ -211,10 +213,17 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
             var absolute = Math.Abs(sample);
             peak = Math.Max(peak, absolute);
             squaredSum += sample * sample;
+
+            if (absolute > 1.0001d)
+                overFullScaleCount++;
+
+            if (absolute >= 0.999d)
+                nearFullScaleCount++;
         }
 
         var rms = Math.Sqrt(squaredSum / signal.Samples.Length);
         var crestFactor = rms > 1e-9 ? peak / rms : 0;
+        var crestFactorDb = crestFactor > 1e-9 ? 20d * Math.Log10(crestFactor) : 0;
         var durationSeconds = signal.Samples.Length / (double)signal.SampleRate;
         var dominantBin = BuildSpectrum(signal)
             .Where(bin => bin.FrequencyHz > 0)
@@ -225,8 +234,12 @@ public sealed class AudioAnalysisService(ILogger<AudioAnalysisService> logger)
             rms,
             peak,
             crestFactor,
+            crestFactorDb,
+            overFullScaleCount,
+            nearFullScaleCount,
             dominantBin?.FrequencyHz ?? 0,
             dominantBin?.Magnitude ?? 0,
+            signal.Samples.Length,
             signal.SampleRate,
             durationSeconds);
     }
@@ -665,7 +678,11 @@ public sealed record SignalMetrics(
     double Rms,
     double Peak,
     double CrestFactor,
+    double CrestFactorDb,
+    int SamplesOverFullScaleCount,
+    int SamplesNearFullScaleCount,
     double DominantFrequencyHz,
     double DominantMagnitudeDb,
+    int SampleCount,
     int SampleRate,
     double DurationSeconds);

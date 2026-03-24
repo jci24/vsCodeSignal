@@ -4,6 +4,7 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>VSCodeSignals.Api-62d1d2a9-1c76-4cdc-a8e8-bbb8f00d5b4f</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

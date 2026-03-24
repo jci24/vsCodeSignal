@@ -23,6 +23,31 @@ const recipesEqual = (left: ITransformRecipe, right: ITransformRecipe): boolean 
 export const useSignalTransforms = (fileId: string | null) => {
   const [recipesByFileId, setRecipesByFileId] = useState<TransformMap>({})
 
+  const setRecipeForFile = useCallback((targetFileId: string, recipe: ITransformRecipe): void => {
+    setRecipesByFileId((current) => {
+      if (!hasActiveTransforms(recipe)) {
+        if (!(targetFileId in current)) {
+          return current
+        }
+
+        const remaining = { ...current }
+        delete remaining[targetFileId]
+        return remaining
+      }
+
+      const previous = current[targetFileId] ?? defaultTransformRecipe
+
+      if (recipesEqual(previous, recipe) && current[targetFileId]) {
+        return current
+      }
+
+      return {
+        ...current,
+        [targetFileId]: recipe,
+      }
+    })
+  }, [])
+
   const activeTransforms = useMemo<ITransformRecipe>(() => {
     if (!fileId) {
       return defaultTransformRecipe
@@ -46,7 +71,8 @@ export const useSignalTransforms = (fileId: string | null) => {
             return current
           }
 
-          const { [fileId]: _removed, ...remaining } = current
+          const remaining = { ...current }
+          delete remaining[fileId]
           return remaining
         }
 
@@ -193,7 +219,8 @@ export const useSignalTransforms = (fileId: string | null) => {
         return current
       }
 
-      const { [fileId]: _removed, ...remaining } = current
+      const remaining = { ...current }
+      delete remaining[fileId]
       return remaining
     })
   }, [fileId])
@@ -203,6 +230,7 @@ export const useSignalTransforms = (fileId: string | null) => {
     hasActiveTransforms: hasActiveTransforms(activeTransforms),
     resetFiltering,
     resetTransforms,
+    setRecipeForFile,
     setFilterCutoffHz,
     setFilterHighCutoffHz,
     setFilterLowCutoffHz,

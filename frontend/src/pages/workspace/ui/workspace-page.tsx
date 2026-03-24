@@ -1,12 +1,13 @@
 import type { JSX } from 'react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
+  BotMessageSquare,
   CircleAlert,
   Database,
   Filter,
+  FileText,
   Gauge,
   PanelRightClose,
-  PanelRightOpen,
   RefreshCw,
   SlidersHorizontal,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ import type { ITransformRecipe } from '@/features/transforms/utils/types'
 import { WaveformPanel } from '@/features/waveform/components/WaveformPanel/WaveformPanel'
 import { Button } from '@/shared/ui/button'
 import { LoadingSpinner } from '@/shared/ui/loading-spinner'
+import { AssistantPanel } from '@/widgets/assistant-panel/ui/AssistantPanel'
 
 import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer/AudioPreviewPlayer'
 import { useWorkspaceImports } from '../hooks/useWorkspaceImports'
@@ -49,11 +51,12 @@ const ANALYSIS_TABS = [
 ] as const
 
 type AnalysisView = (typeof ANALYSIS_TABS)[number]['id']
-type SidebarPanel = 'details' | 'filtering' | 'metrics' | 'transforms' | null
+type SidebarPanel = 'ai' | 'details' | 'filtering' | 'metrics' | 'transforms' | null
 
 export function WorkspacePage(): JSX.Element {
   const [activeView, setActiveView] = useState<AnalysisView>('waveform')
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>(null)
+  const [isInspectRailCollapsed, setIsInspectRailCollapsed] = useState(true)
   const {
     batches,
     errorMessage,
@@ -63,6 +66,7 @@ export function WorkspacePage(): JSX.Element {
     selectedBatch,
     selectedFile,
     selectFile,
+    workspaceId,
   } = useWorkspaceImports()
   const importedFiles = batches.flatMap((batch) => batch.importedFiles)
   const comparableFiles = selectedFile
@@ -75,6 +79,7 @@ export function WorkspacePage(): JSX.Element {
     isFileSelectedForCompare,
     isCompareMode,
     layoutMode,
+    replaceComparisonIds,
     setLayoutMode,
     toggleComparisonFile,
   } = useCompareSelection({
@@ -86,29 +91,12 @@ export function WorkspacePage(): JSX.Element {
     hasActiveTransforms,
     resetFiltering,
     resetTransforms,
+    setRecipeForFile,
     setFilterRecipe,
     setGainDb,
     setNormalize,
     setTrimSilence,
   } = useSignalTransforms(selectedFile?.id ?? null)
-
-  useEffect(() => {
-    if (!selectedFile) {
-      setActiveSidebarPanel(null)
-    }
-  }, [selectedFile])
-
-  useEffect(() => {
-    if (!selectedFile) {
-      setActiveView('waveform')
-    }
-  }, [selectedFile])
-
-  useEffect(() => {
-    if (selectedFile?.signalKind !== 'audio' && activeSidebarPanel && activeSidebarPanel !== 'details') {
-      setActiveSidebarPanel('details')
-    }
-  }, [activeSidebarPanel, selectedFile])
 
   if (isLoading) {
     return (
@@ -228,7 +216,15 @@ export function WorkspacePage(): JSX.Element {
     ? Object.entries(selectedFile.metadata).slice(0, 3)
     : []
   const isAudioFile = selectedFile?.signalKind === 'audio'
-  const allowOverlay = activeView !== 'spectrogram'
+  const defaultSidebarPanel: Exclude<SidebarPanel, null> = isAudioFile ? 'ai' : 'details'
+  const resolvedActiveView: AnalysisView = selectedFile ? activeView : 'waveform'
+  const resolvedSidebarPanel: SidebarPanel =
+    !selectedFile
+      ? null
+      : !isAudioFile && activeSidebarPanel && activeSidebarPanel !== 'details'
+        ? 'details'
+        : activeSidebarPanel ?? defaultSidebarPanel
+  const allowOverlay = resolvedActiveView !== 'spectrogram'
   const effectiveLayout =
     isCompareMode && layoutMode === 'overlay' && !allowOverlay ? 'stack' : layoutMode
   const selectedFileTransforms = selectedFile?.signalKind === 'audio' ? activeTransforms : undefined
@@ -238,7 +234,7 @@ export function WorkspacePage(): JSX.Element {
       selectedFileTransforms &&
       selectedFileTransforms.filter.mode !== 'none',
   )
-  const useFilterOverlay = filterComparisonActive && activeView !== 'spectrogram'
+  const useFilterOverlay = filterComparisonActive && resolvedActiveView !== 'spectrogram'
   const useCompactCharts =
     (isCompareMode && effectiveLayout !== 'overlay') || filterComparisonActive
   const analysisEntries: IAnalysisEntry[] = selectedFile
@@ -279,18 +275,50 @@ export function WorkspacePage(): JSX.Element {
             },
           ]
     : []
-  const isSidebarOpen = activeSidebarPanel !== null
+  const isSidebarOpen = resolvedSidebarPanel !== null
   const showCompareHint = Boolean(selectedFile && canCompare)
   const inspectTabs =
-    selectedFile?.signalKind === 'audio'
+    isAudioFile
       ? [
-          { icon: PanelRightOpen, id: 'details' as const, label: 'Details' },
+          { icon: BotMessageSquare, id: 'ai' as const, label: 'AI' },
+          { icon: FileText, id: 'details' as const, label: 'Details' },
           { icon: Gauge, id: 'metrics' as const, label: 'Metrics' },
           { icon: SlidersHorizontal, id: 'transforms' as const, label: 'Transforms' },
           { icon: Filter, id: 'filtering' as const, label: 'Filtering' },
         ]
-      : [{ icon: PanelRightOpen, id: 'details' as const, label: 'Details' }]
-  const activeInspectTab = inspectTabs.find((tab) => tab.id === activeSidebarPanel) ?? inspectTabs[0]
+      : [{ icon: FileText, id: 'details' as const, label: 'Details' }]
+  const activeInspectTab =
+    inspectTabs.find((tab) => tab.id === resolvedSidebarPanel) ?? inspectTabs[0]
+
+  const applyAssistantWorkspacePatch = (patch: {
+    activeView?: AnalysisView | null
+    compareFileIds?: string[] | null
+    targetFileId?: string | null
+    transforms?: ITransformRecipe | null
+  }): void => {
+    if (patch.activeView) {
+      setActiveView(patch.activeView)
+    }
+
+    if (patch.compareFileIds) {
+      replaceComparisonIds(patch.compareFileIds)
+    }
+
+    if (patch.targetFileId && patch.transforms) {
+      setRecipeForFile(patch.targetFileId, patch.transforms)
+    }
+  }
+
+  const handleInspectTabChange = (panel: Exclude<SidebarPanel, null>): void => {
+    if (resolvedSidebarPanel === panel) {
+      setActiveSidebarPanel(panel)
+      setIsInspectRailCollapsed((current) => !current)
+      return
+    }
+
+    setActiveSidebarPanel(panel)
+    setIsInspectRailCollapsed(false)
+  }
 
   return (
     <div className={styles.root} data-compare={isCompareMode ? 'true' : 'false'}>
@@ -370,6 +398,7 @@ export function WorkspacePage(): JSX.Element {
             <>
               <div
                 className={styles.previewLayout}
+                data-sidebar-collapsed={isInspectRailCollapsed ? 'true' : 'false'}
                 data-compare={isCompareMode ? 'true' : 'false'}
                 data-details-open={isSidebarOpen ? 'true' : 'false'}
               >
@@ -397,9 +426,9 @@ export function WorkspacePage(): JSX.Element {
                           >
                             {ANALYSIS_TABS.map((tab) => (
                               <button
-                                aria-selected={activeView === tab.id}
+                                aria-selected={resolvedActiveView === tab.id}
                                 className={styles.tabButton}
-                                data-active={activeView === tab.id}
+                                data-active={resolvedActiveView === tab.id}
                                 key={tab.id}
                                 onClick={() => setActiveView(tab.id)}
                                 role="tab"
@@ -420,27 +449,6 @@ export function WorkspacePage(): JSX.Element {
                           />
                         </>
                       ) : null}
-
-                      <div className={styles.sidebarActions}>
-                        <Button
-                          aria-label={isSidebarOpen ? 'Hide inspect panel' : 'Show inspect panel'}
-                          aria-pressed={isSidebarOpen}
-                          className={styles.sidebarToggle}
-                          data-open={isSidebarOpen}
-                          onClick={() =>
-                            setActiveSidebarPanel((current) => (current ? null : 'details'))
-                          }
-                          type="button"
-                          variant="outline"
-                        >
-                          {isSidebarOpen ? (
-                            <PanelRightClose className="size-4" />
-                          ) : (
-                            <PanelRightOpen className="size-4" />
-                          )}
-                          Inspect
-                        </Button>
-                      </div>
                     </div>
                   </div>
 
@@ -474,7 +482,7 @@ export function WorkspacePage(): JSX.Element {
                                 </div>
                               ) : null}
 
-                              {activeView === 'waveform' ? (
+                              {resolvedActiveView === 'waveform' ? (
                                 <WaveformPanel
                                   comparisonFileIds={compareFiles.map((file) => file.id)}
                                   comparisonRequests={
@@ -493,7 +501,7 @@ export function WorkspacePage(): JSX.Element {
                                   transforms={selectedFileTransforms}
                                 />
                               ) : null}
-                              {activeView === 'fft' ? (
+                              {resolvedActiveView === 'fft' ? (
                                 <FftPanel
                                   comparisonFileIds={compareFiles.map((file) => file.id)}
                                   comparisonRequests={
@@ -524,21 +532,21 @@ export function WorkspacePage(): JSX.Element {
                                   </div>
                                 ) : null}
 
-                                {activeView === 'waveform' ? (
+                                {resolvedActiveView === 'waveform' ? (
                                   <WaveformPanel
                                     compact={useCompactCharts}
                                     fileId={entry.fileId}
                                     transforms={entry.transforms}
                                   />
                                 ) : null}
-                                {activeView === 'fft' ? (
+                                {resolvedActiveView === 'fft' ? (
                                   <FftPanel
                                     compact={useCompactCharts}
                                     fileId={entry.fileId}
                                     transforms={entry.transforms}
                                   />
                                 ) : null}
-                                {activeView === 'spectrogram' ? (
+                                {resolvedActiveView === 'spectrogram' ? (
                                   <SpectrogramPanel
                                     compact={useCompactCharts}
                                     fileId={entry.fileId}
@@ -568,36 +576,51 @@ export function WorkspacePage(): JSX.Element {
                   </div>
                 </div>
 
-                {activeSidebarPanel ? (
-                  <aside className={styles.detailsSidebar}>
-                    <div className={styles.inspectHeader}>
-                      <p className={styles.sectionEyebrow}>Inspect</p>
-                      <h4 className={styles.inspectTitle}>{activeInspectTab.label}</h4>
-                    </div>
+                {resolvedSidebarPanel ? (
+                  <aside className={styles.detailsSidebar} data-collapsed={isInspectRailCollapsed ? 'true' : 'false'}>
+                    {!isInspectRailCollapsed ? (
+                      <div className={styles.inspectHeader}>
+                        <div className={styles.inspectHeading}>
+                          <p className={styles.sectionEyebrow}>Inspect</p>
+                          <h4 className={styles.inspectTitle}>{activeInspectTab.label}</h4>
+                        </div>
+                        <Button
+                          aria-label="Collapse inspect panel to icons"
+                          className={styles.inspectCollapse}
+                          onClick={() => setIsInspectRailCollapsed(true)}
+                          size="icon"
+                          type="button"
+                          variant="outline"
+                        >
+                          <PanelRightClose className="size-4" />
+                        </Button>
+                      </div>
+                    ) : null}
 
-                    <div aria-label="Inspect panels" className={styles.inspectTabs} role="tablist">
+                    <div aria-label="Inspect panels" className={styles.inspectTabs} data-collapsed={isInspectRailCollapsed ? 'true' : 'false'} role="tablist">
                       {inspectTabs.map((tab) => {
                         const Icon = tab.icon
 
                         return (
                           <button
-                            aria-selected={activeSidebarPanel === tab.id}
+                            aria-selected={resolvedSidebarPanel === tab.id}
                             className={styles.inspectTab}
-                            data-active={activeSidebarPanel === tab.id}
+                            data-active={resolvedSidebarPanel === tab.id}
+                            data-collapsed={isInspectRailCollapsed ? 'true' : 'false'}
                             key={tab.id}
-                            onClick={() => setActiveSidebarPanel(tab.id)}
+                            onClick={() => handleInspectTabChange(tab.id)}
                             role="tab"
                             type="button"
                           >
                             <Icon className="size-4" />
-                            {tab.label}
+                            <span className={styles.inspectTabLabel}>{tab.label}</span>
                           </button>
                         )
                       })}
                     </div>
 
-                    <div className={styles.inspectContent}>
-                      {activeSidebarPanel === 'details' ? (
+                    <div className={styles.inspectContent} data-collapsed={isInspectRailCollapsed ? 'true' : 'false'}>
+                      {!isInspectRailCollapsed && resolvedSidebarPanel === 'details' ? (
                         <>
                           {detailItems.length > 0 ? (
                             <div className={styles.metricColumn}>
@@ -622,7 +645,7 @@ export function WorkspacePage(): JSX.Element {
                         </>
                       ) : null}
 
-                      {activeSidebarPanel === 'transforms' && selectedFile.signalKind === 'audio' ? (
+                      {!isInspectRailCollapsed && resolvedSidebarPanel === 'transforms' && selectedFile.signalKind === 'audio' ? (
                         <TransformsPanel
                           hasActiveTransforms={hasActiveTransforms}
                           onGainDbChange={setGainDb}
@@ -633,14 +656,27 @@ export function WorkspacePage(): JSX.Element {
                         />
                       ) : null}
 
-                      {activeSidebarPanel === 'metrics' && selectedFile.signalKind === 'audio' ? (
+                      {!isInspectRailCollapsed && resolvedSidebarPanel === 'metrics' && selectedFile.signalKind === 'audio' ? (
                         <MetricsPanel
                           fileId={selectedFile.id}
                           transforms={selectedFileTransforms}
                         />
                       ) : null}
 
-                      {activeSidebarPanel === 'filtering' && selectedFile.signalKind === 'audio' ? (
+                      {resolvedSidebarPanel === 'ai' && selectedFile.signalKind === 'audio' ? (
+                        <AssistantPanel
+                          activeView={resolvedActiveView}
+                          compareFileIds={compareFiles.map((file) => file.id)}
+                          fileId={selectedFile.id}
+                          isBriefingCollapsed={isInspectRailCollapsed}
+                          onApplyWorkspacePatch={applyAssistantWorkspacePatch}
+                          onRequestCollapseRail={() => setIsInspectRailCollapsed(true)}
+                          transforms={selectedFileTransforms ?? activeTransforms}
+                          workspaceId={workspaceId}
+                        />
+                      ) : null}
+
+                      {!isInspectRailCollapsed && resolvedSidebarPanel === 'filtering' && selectedFile.signalKind === 'audio' ? (
                         <FilteringPanel
                           onApply={setFilterRecipe}
                           onReset={resetFiltering}

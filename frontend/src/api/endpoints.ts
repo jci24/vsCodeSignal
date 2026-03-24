@@ -1,4 +1,11 @@
 export const API_ENDPOINTS = {
+  AI: {
+    ASK: '/api/ai/ask',
+    CONTEXT: (workspaceId: string) => `/api/ai/context/${workspaceId}`,
+    EXECUTE_ACTION: '/api/ai/execute-action',
+    PLAN_ACTION: '/api/ai/plan-action',
+    SUMMARY: '/api/ai/summary',
+  },
   ANALYSIS: {
     FFT: '/fft',
     METRICS: '/metrics',

@@ -3,7 +3,7 @@ using VSCodeSignals.Api.App.Host;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddFeatureHandlers();
+builder.Services.AddFeatureHandlers(builder.Configuration);
 builder.Services.AddFastEndpoints();
 
 var app = builder.Build();
