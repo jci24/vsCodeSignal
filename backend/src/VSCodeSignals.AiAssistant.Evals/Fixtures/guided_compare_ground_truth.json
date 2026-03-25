@@ -1,0 +1,187 @@
+{
+  "scenarios": [
+    {
+      "id": "compare_candidate_tonal_shift",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 320.0,
+        "spectralCentroidHz": 920.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.26,
+        "lowBandRatio": 0.22,
+        "midBandRatio": 0.52,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "file-b",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": -1.8,
+        "peakDeltaDbFs": -0.9,
+        "dominantFrequencyDeltaHz": 190.0,
+        "spectralCentroidDeltaHz": 260.0,
+        "lowBandEnergyDelta": -0.12,
+        "highBandEnergyDelta": 0.14,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "candidate.wav differs by -1.8 dB RMS",
+          "shifts the dominant FFT bin by +190.0 Hz"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "candidate.wav differs by -1.8 dB RMS"
+        ],
+        "requiredImpactPhrases": [
+          "tonal balance shifted"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_RMS_file-b",
+          "COMPARE_SPECTRAL_CENTROID_file-b"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    },
+    {
+      "id": "compare_transform_after_filter",
+      "prompt": "What changed after the filter?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "transformMode": "highpass",
+      "transformCutoffHz": 80.0,
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 320.0,
+        "spectralCentroidHz": 920.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.26,
+        "lowBandRatio": 0.22,
+        "midBandRatio": 0.52,
+        "samplesOverFullScaleCount": 500,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "comparison": {
+        "kind": "transform_baseline",
+        "fileId": "file-a",
+        "sourcePath": "sample.wav",
+        "rmsDeltaDb": -1.4,
+        "peakDeltaDbFs": -0.8,
+        "dominantFrequencyDeltaHz": 0.0,
+        "spectralCentroidDeltaHz": 240.0,
+        "lowBandEnergyDelta": -0.11,
+        "highBandEnergyDelta": 0.12,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "After the current transforms, RMS changed by -1.4 dB",
+          "decode is running over full scale"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "After the current transforms, RMS changed by -1.4 dB"
+        ],
+        "requiredImpactPhrases": [
+          "decode is still over full scale"
+        ],
+        "requiredFactCodes": [
+          "TRANSFORM_BASELINE_RMS",
+          "TRANSFORM_BASELINE_SPECTRAL_CENTROID"
+        ],
+        "forbiddenAnswerPhrases": [
+          "I could not map that request"
+        ]
+      }
+    },
+    {
+      "id": "explain_spectrogram_variation",
+      "prompt": "Explain this spectrogram",
+      "operation": "explain",
+      "activeView": "spectrogram",
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 640.0,
+        "spectralCentroidHz": 0.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.22,
+        "lowBandRatio": 0.18,
+        "midBandRatio": 0.60,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "high",
+        "spectrogramVariation": 0.44
+      },
+      "expected": {
+        "mode": "single_signal",
+        "recommendedView": "spectrogram",
+        "requiredAnswerPhrases": [
+          "most sustained energy sits in the high band",
+          "Energy changes noticeably over time"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "most sustained energy sits in the high band"
+        ],
+        "requiredImpactPhrases": [
+          "stable versus time-varying energy changes"
+        ],
+        "requiredFactCodes": [
+          "SPECTROGRAM_DOMINANT_BAND",
+          "SPECTROGRAM_TEMPORAL_VARIATION"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    },
+    {
+      "id": "explain_waveform_headroom_coverage",
+      "prompt": "Explain this signal",
+      "operation": "explain",
+      "activeView": "waveform",
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 209.9,
+        "spectralCentroidHz": 0.0,
+        "crestFactorDb": 12.6,
+        "highBandRatio": 0.24,
+        "lowBandRatio": 0.20,
+        "midBandRatio": 0.56,
+        "samplesOverFullScaleCount": 101644,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "expected": {
+        "mode": "single_signal",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "headroom is the main issue",
+          "% of analyzed points"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "headroom is the main standout"
+        ],
+        "requiredImpactPhrases": [
+          "level/headroom problems"
+        ],
+        "requiredFactCodes": [
+          "OVER_FULL_SCALE_SHARE",
+          "SAMPLE_PEAK_DBFS"
+        ],
+        "forbiddenAnswerPhrases": [
+          "101,644 samples",
+          "101,644 decoded samples"
+        ]
+      }
+    }
+  ]
+}

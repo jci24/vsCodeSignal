@@ -19,6 +19,7 @@ public sealed class SignalAnalysisService(
         var file = importedAudioFileResolver.Resolve(context.SelectedFileId);
         var signal = await audioAnalysisService.DecodeMonoAsync(file.ResolvedPath, ct);
         signal = audioAnalysisService.ApplyTransforms(signal, context.Transforms);
+        signal = ApplySelection(signal, context.Selection);
         var metrics = audioAnalysisService.BuildMetrics(signal);
         var spectrum = audioAnalysisService.BuildSpectrum(signal);
         var spectrogram = audioAnalysisService.BuildSpectrogram(signal);
@@ -62,6 +63,7 @@ public sealed class SignalAnalysisService(
 
             var selectedFile = importedAudioFileResolver.Resolve(context.SelectedFileId);
             var originalSignal = await audioAnalysisService.DecodeMonoAsync(selectedFile.ResolvedPath, ct);
+            originalSignal = ApplySelection(originalSignal, context.Selection);
             var originalMetrics = audioAnalysisService.BuildMetrics(originalSignal);
             var originalSpectralSummary = SummarizeSpectrum(audioAnalysisService.BuildSpectrum(originalSignal));
 
@@ -147,6 +149,7 @@ public sealed class SignalAnalysisService(
         {
             var compareFile = importedAudioFileResolver.Resolve(compareFileId);
             var signal = await audioAnalysisService.DecodeMonoAsync(compareFile.ResolvedPath, ct);
+            signal = ApplySelection(signal, context.Selection);
             var metrics = audioAnalysisService.BuildMetrics(signal);
             var spectralSummary = SummarizeSpectrum(audioAnalysisService.BuildSpectrum(signal));
             var rmsDeltaDb = ToDbfs(metrics.Rms) - ToDbfs(signalSummary.Rms);
@@ -387,6 +390,25 @@ public sealed class SignalAnalysisService(
     {
         var totalPoints = Math.Max(1d, Math.Round(metrics.DurationSeconds * metrics.SampleRate));
         return Math.Clamp(metrics.SamplesOverFullScaleCount / totalPoints, 0d, 1d);
+    }
+
+    private static DecodedAudioSignal ApplySelection(
+        DecodedAudioSignal signal,
+        SelectionRangeDto? selection)
+    {
+        if (selection is null || signal.Samples.Length == 0 || signal.SampleRate <= 0)
+            return signal;
+
+        var startSeconds = Math.Max(0d, selection.StartSeconds ?? 0d);
+        var endSeconds = Math.Max(startSeconds, selection.EndSeconds ?? startSeconds);
+        var startIndex = Math.Clamp((int)Math.Floor(startSeconds * signal.SampleRate), 0, signal.Samples.Length - 1);
+        var endIndex = Math.Clamp((int)Math.Ceiling(endSeconds * signal.SampleRate), startIndex + 1, signal.Samples.Length);
+        var length = Math.Max(1, endIndex - startIndex);
+        var slice = signal.Samples.Skip(startIndex).Take(length).ToArray();
+
+        return slice.Length == signal.Samples.Length
+            ? signal
+            : new DecodedAudioSignal(slice, signal.SampleRate);
     }
 
     private static SpectralSummary SummarizeSpectrum(IReadOnlyList<SpectrumBin> spectrum)

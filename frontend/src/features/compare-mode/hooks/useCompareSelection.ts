@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 
 import type { IWorkspaceImportedFile } from '@/pages/workspace/utils/types'
 
@@ -45,7 +45,7 @@ export const useCompareSelection = ({
   )
   const isCompareMode = compareFiles.length > 0
 
-  const toggleComparisonFile = (fileId: string): void => {
+  const toggleComparisonFile = useCallback((fileId: string): void => {
     if (!comparableIdSet.has(fileId)) {
       return
     }
@@ -55,16 +55,16 @@ export const useCompareSelection = ({
         ? current.filter((currentId) => currentId !== fileId)
         : [...current, fileId],
     )
-  }
+  }, [comparableIdSet])
 
-  const clearCompareSelection = (): void => {
+  const clearCompareSelection = useCallback((): void => {
     setRequestedComparisonIds([])
-  }
+  }, [])
 
-  const replaceComparisonIds = (fileIds: string[]): void => {
+  const replaceComparisonIds = useCallback((fileIds: string[]): void => {
     const next = fileIds.filter((fileId) => comparableIdSet.has(fileId))
     setRequestedComparisonIds(next)
-  }
+  }, [comparableIdSet])
 
   return {
     canCompare: comparableFiles.length > 0,

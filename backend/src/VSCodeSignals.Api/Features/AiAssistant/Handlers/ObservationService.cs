@@ -13,7 +13,9 @@ public sealed class ObservationService : IObservationService
         var observations = new List<ObservationDto>();
         var limitations = new List<string>
         {
-            "Analysis is based on a mono decode at 22.05 kHz for the full file.",
+            context.IsSelectionApplied
+                ? $"Analysis is based on a mono decode at 22.05 kHz for {context.SelectionScope}."
+                : "Analysis is based on a mono decode at 22.05 kHz for the full file.",
             "The MVP reports decoded sample metrics and FFT-derived features only. It does not currently estimate true peak or run a dedicated clipping detector."
         };
         var recommendedActions = new List<string>();
@@ -212,8 +214,8 @@ public sealed class ObservationService : IObservationService
             limitations.Add("Active transforms can change level and duration metrics, so interpret them as post-transform values for the selected file.");
         }
 
-        if (context.Selection is not null)
-            limitations.Add("Selected-range context is captured in the contract but not yet applied to DSP analysis in this MVP.");
+        if (context.IsSelectionApplied)
+            recommendedActions.Add("Reset AI scope to the full file if you want to compare this selected region against the overall signal.");
 
         if (recommendedActions.Count == 0)
             recommendedActions.Add("Ask a narrower question about level, dominant frequency, or transform impact to get a more targeted explanation.");

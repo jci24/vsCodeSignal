@@ -14,6 +14,14 @@ internal sealed class AiNarrativeResult
 
     public string Headline { get; init; } = string.Empty;
 
+    public string ImpactSummary { get; init; } = string.Empty;
+
+    public string PrimaryFinding { get; init; } = string.Empty;
+
+    public string RecommendedNextStep { get; init; } = string.Empty;
+
+    public string? RecommendedView { get; init; }
+
     public bool UsedFallback { get; init; }
 }
 
@@ -24,6 +32,14 @@ internal sealed class AiNarrativePayload
     public List<string> FollowUpPrompts { get; init; } = [];
 
     public string Headline { get; init; } = string.Empty;
+
+    public string ImpactSummary { get; init; } = string.Empty;
+
+    public string PrimaryFinding { get; init; } = string.Empty;
+
+    public string RecommendedNextStep { get; init; } = string.Empty;
+
+    public string? RecommendedView { get; init; }
 }
 
 internal sealed class AiResponseComposer(
@@ -109,6 +125,16 @@ internal sealed class AiResponseComposer(
                     Headline = string.IsNullOrWhiteSpace(payload.Headline)
                         ? fallback.Headline
                         : payload.Headline.Trim(),
+                    ImpactSummary = string.IsNullOrWhiteSpace(payload.ImpactSummary)
+                        ? fallback.ImpactSummary
+                        : payload.ImpactSummary.Trim(),
+                    PrimaryFinding = string.IsNullOrWhiteSpace(payload.PrimaryFinding)
+                        ? fallback.PrimaryFinding
+                        : payload.PrimaryFinding.Trim(),
+                    RecommendedNextStep = string.IsNullOrWhiteSpace(payload.RecommendedNextStep)
+                        ? fallback.RecommendedNextStep
+                        : payload.RecommendedNextStep.Trim(),
+                    RecommendedView = NormalizeRecommendedView(payload.RecommendedView) ?? fallback.RecommendedView,
                     UsedFallback = false
                 };
             }
@@ -152,9 +178,14 @@ internal sealed class AiResponseComposer(
         ObservationBundle observationBundle) =>
         new()
         {
+            ImpactSummary = narrative.ImpactSummary,
             KeyFacts = SelectKeyFacts(operation, context.ActiveView, signalSummary, comparisonSummary),
             Limitations = observationBundle.Limitations,
+            Mode = comparisonSummary is not null && comparisonSummary.Comparisons.Count > 0 ? "comparison" : "single_signal",
             NextSteps = observationBundle.RecommendedActions,
+            PrimaryFinding = narrative.PrimaryFinding,
+            RecommendedNextStep = narrative.RecommendedNextStep,
+            RecommendedView = narrative.RecommendedView,
             Summary = narrative.Answer,
             Title = string.IsNullOrWhiteSpace(narrative.Headline)
                 ? GetDefaultHeadline(operation, context.ActiveView)
@@ -194,19 +225,27 @@ internal sealed class AiResponseComposer(
     {
         var headline = GetDefaultHeadline(operation, context.ActiveView);
         string answer;
+        string primaryFinding;
+        string impactSummary;
 
         switch (operation)
         {
             case AiOperationKind.Compare:
                 answer = comparisonSummary is null || comparisonSummary.Comparisons.Count == 0
                     ? "No comparison files are currently selected, so I can only describe the active signal."
-                    : BuildComparisonAnswer(comparisonSummary, observationBundle);
+                    : BuildComparisonAnswer(context, comparisonSummary, observationBundle);
+                primaryFinding = BuildComparisonPrimaryFinding(context, comparisonSummary, observationBundle);
+                impactSummary = BuildComparisonImpactSummary(context, comparisonSummary, observationBundle);
                 break;
             case AiOperationKind.Recommend:
                 answer = BuildRecommendationAnswer(context, observationBundle);
+                primaryFinding = BuildRecommendationPrimaryFinding(context, observationBundle);
+                impactSummary = BuildRecommendationImpactSummary(context);
                 break;
             default:
                 answer = BuildExplainAnswer(context, signalSummary, observationBundle);
+                primaryFinding = BuildExplainPrimaryFinding(context, signalSummary, observationBundle);
+                impactSummary = BuildExplainImpactSummary(context, signalSummary, observationBundle);
                 break;
         }
 
@@ -215,6 +254,10 @@ internal sealed class AiResponseComposer(
             Answer = answer,
             FollowUpPrompts = observationBundle.RecommendedActions,
             Headline = headline,
+            ImpactSummary = impactSummary,
+            PrimaryFinding = primaryFinding,
+            RecommendedNextStep = observationBundle.RecommendedActions.FirstOrDefault() ?? "Inspect the current evidence and ask a narrower follow-up question.",
+            RecommendedView = PickRecommendedView(context, observationBundle.Observations, comparisonSummary),
             UsedFallback = true
         };
     }
@@ -235,6 +278,9 @@ internal sealed class AiResponseComposer(
         if (!string.IsNullOrWhiteSpace(factSummary))
             sentences.Add($"Key facts: {factSummary}.");
 
+        if (context.IsSelectionApplied)
+            sentences.Insert(0, $"This explanation is grounded in {context.SelectionScope}, not the full file.");
+
         if (sentences.Count == 0)
             return "The selected signal is ready for analysis, but there are not enough grounded findings yet to highlight a strong standout.";
 
@@ -242,6 +288,7 @@ internal sealed class AiResponseComposer(
     }
 
     private static string BuildComparisonAnswer(
+        WorkspaceContextDto context,
         ComparisonSummaryDto comparisonSummary,
         ObservationBundle observationBundle)
     {
@@ -264,14 +311,20 @@ internal sealed class AiResponseComposer(
             if (persistentIssue is not null)
                 answer = $"{answer} {persistentIssue.Message}";
 
+            if (context.IsSelectionApplied)
+                answer = $"Within {context.SelectionScope}, {LowercaseSentenceStart(answer)}";
+
             return answer;
         }
 
         var first = comparisonSummary.Comparisons[0];
-
-        return string.Equals(first.ComparisonKind, "transform_baseline", StringComparison.OrdinalIgnoreCase)
+        var baseAnswer = string.Equals(first.ComparisonKind, "transform_baseline", StringComparison.OrdinalIgnoreCase)
             ? $"After the current transforms, RMS changed by {first.RmsDeltaDb:+0.0;-0.0} dB, sample peak changed by {first.PeakDeltaDbFs:+0.0;-0.0} dB, and spectral centroid shifted by {first.SpectralCentroidDeltaHz:+0.0;-0.0} Hz relative to the original signal."
             : $"{first.SourcePath} differs by {first.RmsDeltaDb:+0.0;-0.0} dB RMS, {first.PeakDeltaDbFs:+0.0;-0.0} dB in sample peak, and {first.SpectralCentroidDeltaHz:+0.0;-0.0} Hz in spectral centroid versus the selected file.";
+
+        return context.IsSelectionApplied
+            ? $"Within {context.SelectionScope}, {LowercaseSentenceStart(baseAnswer)}"
+            : baseAnswer;
     }
 
     private static string BuildRecommendationAnswer(
@@ -289,7 +342,171 @@ internal sealed class AiResponseComposer(
             _ => "the current waveform view needs one concrete next check rather than a broader summary"
         };
 
-        return $"Next best step: {firstStep} This is useful because {reason}.";
+        return context.IsSelectionApplied
+            ? $"Next best step for {context.SelectionScope}: {firstStep} This is useful because {reason}."
+            : $"Next best step: {firstStep} This is useful because {reason}.";
+    }
+
+    private static string BuildExplainPrimaryFinding(
+        WorkspaceContextDto context,
+        SignalSummaryDto signalSummary,
+        ObservationBundle observationBundle)
+    {
+        var standout = SelectExplainObservations(context.ActiveView, observationBundle.Observations).FirstOrDefault()?.Message;
+
+        if (!string.IsNullOrWhiteSpace(standout))
+            return standout;
+
+        return context.ActiveView.ToLowerInvariant() switch
+        {
+            "fft" when signalSummary.DominantFrequencyHz > 0 =>
+                $"The strongest spectral feature sits near {signalSummary.DominantFrequencyHz.ToString("0.0", CultureInfo.InvariantCulture)} Hz.",
+            "spectrogram" =>
+                "The current spectrogram view is ready, but it does not yet expose a strong standout.",
+            _ => "The current signal is ready, but it does not yet expose a strong standout."
+        };
+    }
+
+    private static string BuildExplainImpactSummary(
+        WorkspaceContextDto context,
+        SignalSummaryDto signalSummary,
+        ObservationBundle observationBundle)
+    {
+        if (signalSummary.SamplesOverFullScaleCount > 0)
+            return "This matters because level/headroom problems can make other differences harder to trust until they are checked first.";
+
+        if (context.ActiveView.Equals("fft", StringComparison.OrdinalIgnoreCase))
+            return "This matters because the main spectral balance often tells you more than isolated peaks when you are comparing runs.";
+
+        if (context.ActiveView.Equals("spectrogram", StringComparison.OrdinalIgnoreCase))
+            return "This matters because stable versus time-varying energy changes can point you to the right section to inspect next.";
+
+        var dynamics = observationBundle.Observations.FirstOrDefault(item =>
+            item.Code is "WAVEFORM_DENSE_ENVELOPE" or "WAVEFORM_PRONOUNCED_PEAKS" or "DENSE_DYNAMICS");
+
+        return dynamics is not null
+            ? "This matters because the overall shape of the signal is more important here than a single isolated peak."
+            : "This matters because the current signal has one dominant pattern worth checking before going deeper.";
+    }
+
+    private static string BuildComparisonPrimaryFinding(
+        WorkspaceContextDto context,
+        ComparisonSummaryDto? comparisonSummary,
+        ObservationBundle observationBundle)
+    {
+        var comparisonObservation = observationBundle.Observations
+            .Where(item => item.Code.StartsWith("TRANSFORM_", StringComparison.OrdinalIgnoreCase) ||
+                           item.Code.StartsWith("COMPARE_", StringComparison.OrdinalIgnoreCase))
+            .Where(item => !string.Equals(item.Code, "TRANSFORMS_APPLY_TO_SELECTED_FILE_ONLY", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(GetComparisonPriority)
+            .FirstOrDefault();
+
+        if (comparisonObservation is not null)
+            return comparisonObservation.Message;
+
+        if (comparisonSummary is null || comparisonSummary.Comparisons.Count == 0)
+            return "No comparison is active yet.";
+
+        var first = comparisonSummary.Comparisons[0];
+        var prefix = context.IsSelectionApplied ? $"Within {context.SelectionScope}, " : string.Empty;
+
+        return string.Equals(first.ComparisonKind, "transform_baseline", StringComparison.OrdinalIgnoreCase)
+            ? $"{prefix}RMS changed by {first.RmsDeltaDb:+0.0;-0.0} dB relative to the original signal."
+            : $"{prefix}{first.SourcePath} differs by {first.RmsDeltaDb:+0.0;-0.0} dB RMS versus the selected file.";
+    }
+
+    private static string BuildComparisonImpactSummary(
+        WorkspaceContextDto context,
+        ComparisonSummaryDto? comparisonSummary,
+        ObservationBundle observationBundle)
+    {
+        var persistentIssue = observationBundle.Observations.FirstOrDefault(item => item.Code == "PCM_OVER_FULL_SCALE");
+
+        if (persistentIssue is not null)
+            return "This matters because the decode is still over full scale, so level issues may be as important as the comparison itself.";
+
+        if (comparisonSummary is null || comparisonSummary.Comparisons.Count == 0)
+            return "This matters because there is no active comparison yet.";
+
+        var first = comparisonSummary.Comparisons[0];
+
+        if (Math.Abs(first.SpectralCentroidDeltaHz) >= 180d ||
+            Math.Abs(first.DominantFrequencyDeltaHz) >= 150d ||
+            Math.Abs(first.HighBandEnergyDelta) >= 0.08d ||
+            Math.Abs(first.LowBandEnergyDelta) >= 0.08d)
+        {
+            return "This matters because the tonal balance shifted, so FFT is the best place to confirm what changed.";
+        }
+
+        if (Math.Abs(first.RmsDeltaDb) >= 1d || Math.Abs(first.PeakDeltaDbFs) >= 0.75d)
+            return "This matters because the biggest change is level or headroom, which can dominate how the difference is perceived.";
+
+        return context.IsSelectionApplied
+            ? "This matters because the selected region changed in a measurable way, even if the full-file difference may be smaller."
+            : "This matters because the current run differs enough from the baseline to justify a focused follow-up check.";
+    }
+
+    private static string BuildRecommendationPrimaryFinding(
+        WorkspaceContextDto context,
+        ObservationBundle observationBundle)
+    {
+        var next = observationBundle.RecommendedActions.FirstOrDefault();
+
+        return string.IsNullOrWhiteSpace(next)
+            ? "There is not a strong guided next step yet."
+            : context.IsSelectionApplied
+                ? $"The next best step for {context.SelectionScope} is clear."
+                : "The next best step is clear from the current evidence.";
+    }
+
+    private static string BuildRecommendationImpactSummary(WorkspaceContextDto context) =>
+        context.ActiveView.ToLowerInvariant() switch
+        {
+            "fft" => "This matters because FFT makes the main frequency difference easier to confirm than waveform alone.",
+            "spectrogram" => "This matters because spectrogram view helps verify whether the change is steady or time-local.",
+            _ => "This matters because one focused next check is more useful here than another broad summary."
+        };
+
+    private static string? PickRecommendedView(
+        WorkspaceContextDto context,
+        IReadOnlyList<ObservationDto> observations,
+        ComparisonSummaryDto? comparisonSummary)
+    {
+        if (observations.Any(item => item.Code.Contains("SPECTROGRAM", StringComparison.OrdinalIgnoreCase)))
+            return "spectrogram";
+
+        if (comparisonSummary is not null && comparisonSummary.Comparisons.Count > 0)
+        {
+            var first = comparisonSummary.Comparisons[0];
+
+            if (Math.Abs(first.SpectralCentroidDeltaHz) >= 120d ||
+                Math.Abs(first.DominantFrequencyDeltaHz) >= 100d ||
+                Math.Abs(first.HighBandEnergyDelta) >= 0.08d ||
+                Math.Abs(first.LowBandEnergyDelta) >= 0.08d)
+            {
+                return "fft";
+            }
+        }
+
+        if (observations.Any(item => item.Code.StartsWith("FFT_", StringComparison.OrdinalIgnoreCase)) ||
+            observations.Any(item => item.Code == "DOMINANT_FREQUENCY_PRESENT"))
+        {
+            return "fft";
+        }
+
+        return NormalizeRecommendedView(context.ActiveView) ?? "waveform";
+    }
+
+    private static string? NormalizeRecommendedView(string? view)
+    {
+        if (string.IsNullOrWhiteSpace(view))
+            return null;
+
+        var normalized = view.Trim().ToLowerInvariant();
+
+        return normalized is "waveform" or "fft" or "spectrogram"
+            ? normalized
+            : null;
     }
 
     private static string GetDefaultHeadline(AiOperationKind operation, string activeView) =>
@@ -476,6 +693,17 @@ internal sealed class AiResponseComposer(
         return $"{string.Join(", ", items.Take(items.Count - 1))}, and {items[^1]}";
     }
 
+    private static string LowercaseSentenceStart(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return value;
+
+        if (value.Length == 1)
+            return value.ToLowerInvariant();
+
+        return char.ToLowerInvariant(value[0]) + value[1..];
+    }
+
     private static List<string> BuildWaveformExplainSentences(
         SignalSummaryDto signalSummary,
         IReadOnlyList<ObservationDto> observations)
@@ -642,6 +870,9 @@ internal sealed class AiResponseComposer(
         if (code.Contains("RMS_DELTA", StringComparison.OrdinalIgnoreCase))
             return 60;
 
+        if (code.Contains("LEVEL_DELTA", StringComparison.OrdinalIgnoreCase))
+            return 60;
+
         if (code.Contains("PEAK_DELTA", StringComparison.OrdinalIgnoreCase))
             return 55;
 
@@ -802,17 +1033,23 @@ internal sealed class AiAssistantService(
         var signalSummary = await signalAnalysisService.GetSignalSummaryAsync(context, ct);
         var comparisonSummary = await signalAnalysisService.GetComparisonSummaryAsync(context, signalSummary, ct);
         var observationBundle = observationService.Build(context, signalSummary, comparisonSummary);
+        var operation = comparisonSummary is not null && comparisonSummary.Comparisons.Count > 0
+            ? AiOperationKind.Compare
+            : AiOperationKind.Summary;
+        var summaryPrompt = operation == AiOperationKind.Compare
+            ? "Provide a first-pass comparison summary of the baseline and candidate signals."
+            : "Provide a first-pass summary of the current signal workspace state.";
         var narrative = await responseComposer.GenerateNarrativeAsync(
-            AiOperationKind.Summary,
+            operation,
             context,
             signalSummary,
             comparisonSummary,
             observationBundle,
-            "Provide a first-pass summary of the current signal workspace state.",
+            summaryPrompt,
             [],
             ct);
 
-        return responseComposer.BuildSummaryCard(AiOperationKind.Summary, context, narrative, signalSummary, comparisonSummary, observationBundle);
+        return responseComposer.BuildSummaryCard(operation, context, narrative, signalSummary, comparisonSummary, observationBundle);
     }
 
     public async Task<AiResponseDto> AskAsync(AiRequestDto request, CancellationToken ct)
