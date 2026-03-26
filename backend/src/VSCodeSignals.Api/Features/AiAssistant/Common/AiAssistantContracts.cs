@@ -297,7 +297,17 @@ public sealed class AiSummaryCardDto
 
     public List<string> Limitations { get; init; } = [];
 
+    public string Mode { get; init; } = "single_signal";
+
     public List<string> NextSteps { get; init; } = [];
+
+    public string PrimaryFinding { get; init; } = string.Empty;
+
+    public string ImpactSummary { get; init; } = string.Empty;
+
+    public string RecommendedNextStep { get; init; } = string.Empty;
+
+    public string? RecommendedView { get; init; }
 
     public string Summary { get; init; } = string.Empty;
 

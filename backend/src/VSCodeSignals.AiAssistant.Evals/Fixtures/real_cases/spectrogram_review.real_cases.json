@@ -1,0 +1,53 @@
+{
+  "scenarios": [
+    {
+      "enabled": false,
+      "id": "selected_region_sustained_mid_band",
+      "label": "Selected region shows a stable mid-band concentration",
+      "prompt": "Explain this selected region",
+      "operation": "explain",
+      "activeView": "spectrogram",
+      "artifacts": {
+        "baselineAudio": "assets/selected_region_sustained_mid_band/baseline.wav",
+        "notes": "assets/selected_region_sustained_mid_band/notes.md",
+        "screenshot": "assets/selected_region_sustained_mid_band/screenshot.png"
+      },
+      "selectionStartSeconds": 18.0,
+      "selectionEndSeconds": 26.5,
+      "transformMode": "none",
+      "transformCutoffHz": 1200.0,
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 640.0,
+        "spectralCentroidHz": 1300.0,
+        "crestFactorDb": 9.2,
+        "highBandRatio": 0.18,
+        "lowBandRatio": 0.17,
+        "midBandRatio": 0.65,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.12
+      },
+      "expected": {
+        "mode": "single_signal",
+        "recommendedView": "spectrogram",
+        "requiredAnswerPhrases": [
+          "selected region",
+          "stable"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "mid-band"
+        ],
+        "requiredImpactPhrases": [
+          "steady"
+        ],
+        "requiredFactCodes": [
+          "SPECTROGRAM_DOMINANT_BAND"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    }
+  ]
+}

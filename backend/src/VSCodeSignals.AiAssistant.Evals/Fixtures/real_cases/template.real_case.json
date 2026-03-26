@@ -1,0 +1,63 @@
+{
+  "scenarios": [
+    {
+      "enabled": false,
+      "id": "replace_with_real_case_id",
+      "label": "Short human-readable case name",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "artifacts": {
+        "baselineAudio": "assets/replace_with_real_case_id/baseline.wav",
+        "candidateAudio": "assets/replace_with_real_case_id/candidate.wav",
+        "notes": "assets/replace_with_real_case_id/notes.md",
+        "screenshot": "assets/replace_with_real_case_id/screenshot.png"
+      },
+      "transformMode": "none",
+      "transformCutoffHz": 1200.0,
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 320.0,
+        "spectralCentroidHz": 920.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.26,
+        "lowBandRatio": 0.22,
+        "midBandRatio": 0.52,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "file-b",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": -1.8,
+        "peakDeltaDbFs": -0.9,
+        "dominantFrequencyDeltaHz": 190.0,
+        "spectralCentroidDeltaHz": 260.0,
+        "lowBandEnergyDelta": -0.12,
+        "highBandEnergyDelta": 0.14,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "candidate.wav differs by -1.8 dB RMS"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "candidate.wav differs by -1.8 dB RMS"
+        ],
+        "requiredImpactPhrases": [
+          "tonal balance shifted"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_RMS_file-b"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    }
+  ]
+}

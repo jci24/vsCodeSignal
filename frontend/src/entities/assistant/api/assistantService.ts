@@ -39,6 +39,14 @@ export const assistantService = {
       query.set('compareFileIds', request.compareFileIds.join(','))
     }
 
+    if (typeof request.selection?.startSeconds === 'number') {
+      query.set('startSeconds', request.selection.startSeconds.toString())
+    }
+
+    if (typeof request.selection?.endSeconds === 'number') {
+      query.set('endSeconds', request.selection.endSeconds.toString())
+    }
+
     return apiClient.request<IAssistantWorkspaceContext>(
       `${API_ENDPOINTS.AI.CONTEXT(request.workspaceId)}?${query.toString()}`,
       {

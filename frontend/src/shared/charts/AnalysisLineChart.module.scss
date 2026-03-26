@@ -7,8 +7,8 @@
 }
 
 .compact {
-  min-height: 8rem;
-  height: clamp(8rem, 20vh, 11rem);
+  min-height: 6.75rem;
+  height: clamp(6.75rem, 16vh, 9rem);
 }
 
 @media (max-width: 767px) {
@@ -18,8 +18,8 @@
   }
 
   .compact {
-    min-height: 7.5rem;
-    height: clamp(7.5rem, 18vh, 9rem);
+    min-height: 6.75rem;
+    height: clamp(6.75rem, 16vh, 8rem);
   }
 }
 
@@ -30,7 +30,7 @@
   }
 
   .compact {
-    min-height: 7.75rem;
-    height: clamp(7.75rem, 18vh, 9.5rem);
+    min-height: 6.5rem;
+    height: clamp(6.5rem, 15vh, 8rem);
   }
 }

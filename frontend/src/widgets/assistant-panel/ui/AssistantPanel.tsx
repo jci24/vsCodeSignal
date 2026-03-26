@@ -4,6 +4,7 @@ import type {
   AssistantAnalysisView,
   IAiActionProposal,
   IAiResponse,
+  ISelectionRange,
   IWorkspaceStatePatch,
 } from '@/entities/assistant/model/types'
 import { useAssistantConversation } from '@/features/ask-assistant/model/useAssistantConversation'
@@ -21,6 +22,7 @@ interface AssistantPanelProps {
   isBriefingCollapsed?: boolean
   onApplyWorkspacePatch: (patch: IWorkspaceStatePatch) => void
   onRequestCollapseRail?: () => void
+  selection?: ISelectionRange | null
   transforms: ITransformRecipe
   workspaceId: string
 }
@@ -32,6 +34,7 @@ export function AssistantPanel({
   isBriefingCollapsed = false,
   onApplyWorkspacePatch,
   onRequestCollapseRail,
+  selection,
   transforms,
   workspaceId,
 }: AssistantPanelProps): JSX.Element {
@@ -46,6 +49,7 @@ export function AssistantPanel({
     activeView,
     compareFileIds,
     fileId,
+    selection,
     transforms,
     workspaceId,
   }

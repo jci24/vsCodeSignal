@@ -1,3 +1,4 @@
+using System.Globalization;
 using VSCodeSignals.Api.Features.AiAssistant.Common;
 using VSCodeSignals.Api.Features.Workspaces.Handler;
 using VSCodeSignals.Api.Features.Workspaces.Response;
@@ -24,19 +25,21 @@ public sealed class WorkspaceContextService(
 
         if (string.IsNullOrWhiteSpace(request.FileId))
         {
+            var emptySelection = NormalizeSelection(request.Selection, durationSeconds: null, out var emptySelectionWarning);
+            var emptyWarnings = string.IsNullOrWhiteSpace(emptySelectionWarning)
+                ? new List<string>()
+                : new List<string> { emptySelectionWarning };
+
             return Task.FromResult(new WorkspaceContextDto
             {
                 ActiveView = NormalizeView(request.ActiveView),
                 AvailableFiles = files,
-                Selection = request.Selection,
-                SelectionScope = request.Selection is null
-                    ? "full-file"
-                    : "selection requested but not yet applied in AI analysis",
+                IsSelectionApplied = emptySelection is not null,
+                Selection = emptySelection,
+                SelectionScope = DescribeSelectionScope(emptySelection),
                 SupportedCommands = AiAssistantCommandCatalog.All.ToList(),
                 Transforms = request.Transforms,
-                Warnings = request.Selection is null
-                    ? []
-                    : ["Selected-range grounding is designed into the contract but not yet active in the MVP."],
+                Warnings = emptyWarnings,
                 WorkspaceId = snapshot.WorkspaceId
             });
         }
@@ -44,6 +47,10 @@ public sealed class WorkspaceContextService(
         var selectedFile = importedAudioFileResolver.Resolve(request.FileId);
         var warnings = new List<string>();
         var compareFiles = new List<WorkspaceImportedFile>();
+        var normalizedSelection = NormalizeSelection(request.Selection, selectedFile.DurationSeconds, out var selectionWarning);
+
+        if (!string.IsNullOrWhiteSpace(selectionWarning))
+            warnings.Add(selectionWarning);
 
         foreach (var compareFileId in request.CompareFileIds
                      .Where(id => !string.Equals(id, selectedFile.Id, StringComparison.OrdinalIgnoreCase))
@@ -60,22 +67,17 @@ public sealed class WorkspaceContextService(
             }
         }
 
-        if (request.Selection is not null)
-            warnings.Add("Selected-range grounding is designed into the contract but not yet active in the MVP.");
-
         return Task.FromResult(new WorkspaceContextDto
         {
             ActiveView = NormalizeView(request.ActiveView),
             AvailableFiles = files,
             CompareFileIds = compareFiles.Select(file => file.Id).ToList(),
             CompareFiles = compareFiles.Select(ToFileReference).ToList(),
-            IsSelectionApplied = false,
+            IsSelectionApplied = normalizedSelection is not null,
             SelectedFile = ToFileReference(selectedFile),
             SelectedFileId = selectedFile.Id,
-            Selection = request.Selection,
-            SelectionScope = request.Selection is null
-                ? "full-file"
-                : "selection requested but not yet applied in AI analysis",
+            Selection = normalizedSelection,
+            SelectionScope = DescribeSelectionScope(normalizedSelection),
             SupportedCommands = AiAssistantCommandCatalog.All.ToList(),
             Transforms = request.Transforms,
             Warnings = warnings,
@@ -101,4 +103,51 @@ public sealed class WorkspaceContextService(
             ? normalized
             : "waveform";
     }
+
+    private static SelectionRangeDto? NormalizeSelection(
+        SelectionRangeDto? selection,
+        double? durationSeconds,
+        out string? warning)
+    {
+        warning = null;
+
+        if (selection is null)
+            return null;
+
+        var start = Math.Max(0d, selection.StartSeconds ?? 0d);
+        var end = selection.EndSeconds ?? durationSeconds ?? start;
+
+        if (durationSeconds is > 0d)
+        {
+            var clampedStart = Math.Min(start, durationSeconds.Value);
+            var clampedEnd = Math.Min(Math.Max(end, 0d), durationSeconds.Value);
+
+            if (Math.Abs(clampedStart - start) > 0.0001d || Math.Abs(clampedEnd - end) > 0.0001d)
+                warning = "Selection was clamped to the available signal duration.";
+
+            start = clampedStart;
+            end = clampedEnd;
+        }
+        else
+        {
+            end = Math.Max(end, 0d);
+        }
+
+        if (end <= start)
+        {
+            warning = "Selection was ignored because the end time must be greater than the start time.";
+            return null;
+        }
+
+        return new SelectionRangeDto
+        {
+            StartSeconds = Math.Round(start, 4),
+            EndSeconds = Math.Round(end, 4)
+        };
+    }
+
+    private static string DescribeSelectionScope(SelectionRangeDto? selection) =>
+        selection is null
+            ? "full-file"
+            : $"selected region {selection.StartSeconds?.ToString("0.00", CultureInfo.InvariantCulture)}s to {selection.EndSeconds?.ToString("0.00", CultureInfo.InvariantCulture)}s";
 }

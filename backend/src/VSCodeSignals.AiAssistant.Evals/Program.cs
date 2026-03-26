@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Globalization;
+using System.Text.Json;
 using VSCodeSignals.Api.Features.AiAssistant.Common;
 using VSCodeSignals.Api.Features.AiAssistant.Handlers;
 using VSCodeSignals.Api.Shared.SignalAnalysis;
@@ -103,6 +105,24 @@ Run("Observation service emits spectrogram view observations", () =>
            bundle.Observations.Any(item => item.Code == "SPECTROGRAM_TEMPORAL_VARIATION_HIGH");
 });
 
+Run("Selection-scoped observations update the limitation text", () =>
+{
+    var service = new ObservationService();
+    var bundle = service.Build(
+        CreateContext(
+            activeView: "waveform",
+            selection: new SelectionRangeDto
+            {
+                StartSeconds = 12.5d,
+                EndSeconds = 18.0d
+            }),
+        CreateSignalSummary(samplesOverFullScaleCount: 128),
+        null);
+
+    return bundle.Limitations.Any(item => item.Contains("selected region 12.50s to 18.00s", StringComparison.OrdinalIgnoreCase)) &&
+           bundle.Limitations.All(item => !item.Contains("not yet applied to DSP analysis", StringComparison.OrdinalIgnoreCase));
+});
+
 Run("Prompt builder includes concise guidance and supported next steps", () =>
 {
     var promptBuilder = new AiPromptBuilder();
@@ -185,6 +205,35 @@ await RunAsync("Fallback waveform narrative uses coverage instead of raw sample 
            !narrative.Answer.StartsWith("101,644", StringComparison.OrdinalIgnoreCase);
 });
 
+await RunAsync("Selected-region fallback narrative makes scope explicit", async () =>
+{
+    var composer = CreateResponseComposer(enableLlm: false);
+    var context = CreateContext(
+        activeView: "waveform",
+        selection: new SelectionRangeDto
+        {
+            StartSeconds = 4.0d,
+            EndSeconds = 9.5d
+        });
+    var signalSummary = CreateSignalSummary(
+        dominantBand: "mid",
+        dominantFrequencyHz: 209.9d,
+        crestFactorDb: 12.6d,
+        samplesOverFullScaleCount: 320);
+    var bundle = new ObservationService().Build(context, signalSummary, null);
+    var narrative = await composer.GenerateNarrativeAsync(
+        AiOperationKind.Explain,
+        context,
+        signalSummary,
+        null,
+        bundle,
+        "What stands out in this section?",
+        [],
+        CancellationToken.None);
+
+    return narrative.Answer.Contains("selected region 4.00s to 9.50s", StringComparison.OrdinalIgnoreCase);
+});
+
 await RunAsync("Comparison summary card prioritizes comparison facts", async () =>
 {
     var composer = CreateResponseComposer(enableLlm: false);
@@ -240,7 +289,12 @@ await RunAsync("Comparison summary card prioritizes comparison facts", async () 
         bundle);
 
     return card.Title == "Comparison summary" &&
+           card.Mode == "comparison" &&
            card.KeyFacts.Any(item => item.Code == "TRANSFORM_BASELINE_RMS") &&
+           !string.IsNullOrWhiteSpace(card.PrimaryFinding) &&
+           !string.IsNullOrWhiteSpace(card.ImpactSummary) &&
+           !string.IsNullOrWhiteSpace(card.RecommendedNextStep) &&
+           card.RecommendedView == "fft" &&
            card.TopObservations.All(item => item.Code.StartsWith("TRANSFORM_", StringComparison.OrdinalIgnoreCase));
 });
 
@@ -356,6 +410,10 @@ await RunAsync("Waveform summary card prefers over-full-scale coverage fact", as
         bundle);
 
     return card.KeyFacts.Any(item => item.Code == "OVER_FULL_SCALE_SHARE") &&
+           card.Mode == "single_signal" &&
+           !string.IsNullOrWhiteSpace(card.PrimaryFinding) &&
+           !string.IsNullOrWhiteSpace(card.ImpactSummary) &&
+           !string.IsNullOrWhiteSpace(card.RecommendedNextStep) &&
            card.KeyFacts.All(item => item.Code != "SAMPLES_OVER_FULL_SCALE");
 });
 
@@ -373,6 +431,8 @@ Run("Model routing can prefer Ollama directly", () =>
     var route = routing.Resolve(AiOperationKind.Explain, "Explain this FFT");
     return route.ProviderKey == "ollama";
 });
+
+await RunGroundTruthScenariosAsync();
 
 if (failures.Count > 0)
 {
@@ -429,12 +489,57 @@ void WriteResult(string name, bool passed)
     Console.WriteLine($"FAIL  {name}");
 }
 
+async Task RunGroundTruthScenariosAsync()
+{
+    foreach (var scenario in LoadGroundTruthScenarios())
+    {
+        var displayName = string.IsNullOrWhiteSpace(scenario.Label)
+            ? scenario.Id
+            : $"{scenario.Id} ({scenario.Label})";
+
+        await RunAsync($"Ground truth {displayName}", async () =>
+        {
+            var composer = CreateResponseComposer(enableLlm: false);
+            var operation = ParseOperation(scenario.Operation);
+            var context = CreateGroundTruthContext(scenario);
+            var signalSummary = CreateGroundTruthSignalSummary(scenario.Signal);
+            var comparisonSummary = CreateComparisonSummary(scenario.Comparison, signalSummary);
+            var bundle = new ObservationService().Build(context, signalSummary, comparisonSummary);
+            var narrative = await composer.GenerateNarrativeAsync(
+                operation,
+                context,
+                signalSummary,
+                comparisonSummary,
+                bundle,
+                scenario.Prompt,
+                [],
+                CancellationToken.None);
+            var card = composer.BuildSummaryCard(
+                operation,
+                context,
+                narrative,
+                signalSummary,
+                comparisonSummary,
+                bundle);
+
+            AssertGroundTruthScenario(scenario, narrative, card);
+            return true;
+        });
+    }
+}
+
 static WorkspaceContextDto CreateContext(
     string activeView,
-    SignalTransformRecipe? transforms = null) =>
+    SignalTransformRecipe? transforms = null,
+    SelectionRangeDto? selection = null) =>
     new()
     {
         ActiveView = activeView,
+        IsSelectionApplied = selection is not null,
+        Selection = selection,
+        SelectionScope = selection is null
+            ? "full-file"
+            : $"selected region {selection.StartSeconds?.ToString("0.00", CultureInfo.InvariantCulture)}s to {selection.EndSeconds?.ToString("0.00", CultureInfo.InvariantCulture)}s",
         SelectedFileId = "file-a",
         SelectedFile = new WorkspaceFileReferenceDto
         {
@@ -445,6 +550,27 @@ static WorkspaceContextDto CreateContext(
         SupportedCommands = AiAssistantCommandCatalog.All.ToList(),
         Transforms = transforms ?? CreateTransforms()
     };
+
+static WorkspaceContextDto CreateGroundTruthContext(GroundTruthScenario scenario)
+{
+    SelectionRangeDto? selection = null;
+
+    if (scenario.SelectionStartSeconds is not null || scenario.SelectionEndSeconds is not null)
+    {
+        selection = new SelectionRangeDto
+        {
+            StartSeconds = scenario.SelectionStartSeconds,
+            EndSeconds = scenario.SelectionEndSeconds
+        };
+    }
+
+    return CreateContext(
+        activeView: scenario.ActiveView,
+        transforms: CreateTransforms(
+            mode: scenario.TransformMode ?? "none",
+            cutoffHz: scenario.TransformCutoffHz ?? 1200d),
+        selection: selection);
+}
 
 static SignalSummaryDto CreateSignalSummary(
     string dominantBand = "mixed",
@@ -492,6 +618,194 @@ static SignalSummaryDto CreateSignalSummary(
         SpectralCentroidHz = spectralCentroidHz,
         SpectrogramDominantBand = spectrogramBand,
         SpectrogramTemporalVariation = spectrogramVariation
+    };
+
+static SignalSummaryDto CreateGroundTruthSignalSummary(GroundTruthSignalSpec signal) =>
+    CreateSignalSummary(
+        dominantBand: signal.DominantBand,
+        dominantFrequencyHz: signal.DominantFrequencyHz,
+        spectralCentroidHz: signal.SpectralCentroidHz,
+        crestFactorDb: signal.CrestFactorDb,
+        highBandRatio: signal.HighBandRatio,
+        lowBandRatio: signal.LowBandRatio,
+        midBandRatio: signal.MidBandRatio,
+        samplesOverFullScaleCount: signal.SamplesOverFullScaleCount,
+        spectrogramBand: signal.SpectrogramBand,
+        spectrogramVariation: signal.SpectrogramVariation);
+
+static ComparisonSummaryDto? CreateComparisonSummary(
+    GroundTruthComparisonSpec? comparison,
+    SignalSummaryDto signalSummary)
+{
+    if (comparison is null)
+        return null;
+
+    return new ComparisonSummaryDto
+    {
+        PrimaryFileId = signalSummary.FileId,
+        CompareFileIds = [comparison.FileId],
+        Comparisons =
+        [
+            new ComparisonDeltaDto
+            {
+                ComparisonKind = comparison.Kind,
+                DurationDeltaSeconds = comparison.DurationDeltaSeconds,
+                DominantFrequencyDeltaHz = comparison.DominantFrequencyDeltaHz,
+                Facts = BuildComparisonFacts(comparison),
+                FileId = comparison.FileId,
+                HighBandEnergyDelta = comparison.HighBandEnergyDelta,
+                LowBandEnergyDelta = comparison.LowBandEnergyDelta,
+                PeakDeltaDbFs = comparison.PeakDeltaDbFs,
+                RmsDeltaDb = comparison.RmsDeltaDb,
+                SourcePath = comparison.SourcePath,
+                SpectralCentroidDeltaHz = comparison.SpectralCentroidDeltaHz
+            }
+        ]
+    };
+}
+
+static List<EvidenceItemDto> BuildComparisonFacts(GroundTruthComparisonSpec comparison)
+{
+    if (string.Equals(comparison.Kind, "transform_baseline", StringComparison.OrdinalIgnoreCase))
+    {
+        return
+        [
+            new EvidenceItemDto { Code = "TRANSFORM_BASELINE_RMS", Label = "RMS change", ValueText = $"{comparison.RmsDeltaDb:+0.0;-0.0} dB" },
+            new EvidenceItemDto { Code = "TRANSFORM_BASELINE_PEAK", Label = "Peak change", ValueText = $"{comparison.PeakDeltaDbFs:+0.0;-0.0} dB" },
+            new EvidenceItemDto { Code = "TRANSFORM_BASELINE_SPECTRAL_CENTROID", Label = "Spectral centroid change", ValueText = $"{comparison.SpectralCentroidDeltaHz:+0.0;-0.0} Hz" },
+            new EvidenceItemDto { Code = "TRANSFORM_BASELINE_LOW_BAND", Label = "Low-band change", ValueText = $"{comparison.LowBandEnergyDelta * 100d:+0.0;-0.0} pts" },
+            new EvidenceItemDto { Code = "TRANSFORM_BASELINE_HIGH_BAND", Label = "High-band change", ValueText = $"{comparison.HighBandEnergyDelta * 100d:+0.0;-0.0} pts" }
+        ];
+    }
+
+    return
+    [
+        new EvidenceItemDto { Code = $"COMPARE_RMS_{comparison.FileId}", Label = "RMS change", ValueText = $"{comparison.RmsDeltaDb:+0.0;-0.0} dB" },
+        new EvidenceItemDto { Code = $"COMPARE_PEAK_{comparison.FileId}", Label = "Peak change", ValueText = $"{comparison.PeakDeltaDbFs:+0.0;-0.0} dB" },
+        new EvidenceItemDto { Code = $"COMPARE_SPECTRAL_CENTROID_{comparison.FileId}", Label = "Spectral centroid change", ValueText = $"{comparison.SpectralCentroidDeltaHz:+0.0;-0.0} Hz" },
+        new EvidenceItemDto { Code = $"COMPARE_LOW_BAND_{comparison.FileId}", Label = "Low-band change", ValueText = $"{comparison.LowBandEnergyDelta * 100d:+0.0;-0.0} pts" },
+        new EvidenceItemDto { Code = $"COMPARE_HIGH_BAND_{comparison.FileId}", Label = "High-band change", ValueText = $"{comparison.HighBandEnergyDelta * 100d:+0.0;-0.0} pts" },
+        new EvidenceItemDto { Code = $"COMPARE_DURATION_{comparison.FileId}", Label = "Duration change", ValueText = $"{comparison.DurationDeltaSeconds:+0.0;-0.0} s" }
+    ];
+}
+
+static void AssertGroundTruthScenario(
+    GroundTruthScenario scenario,
+    AiNarrativeResult narrative,
+    AiSummaryCardDto card)
+{
+    var issues = new List<string>();
+
+    if (!string.Equals(card.Mode, scenario.Expected.Mode, StringComparison.OrdinalIgnoreCase))
+        issues.Add($"Expected summary mode '{scenario.Expected.Mode}' but found '{card.Mode}'.");
+
+    if (!string.Equals(card.RecommendedView ?? string.Empty, scenario.Expected.RecommendedView ?? string.Empty, StringComparison.OrdinalIgnoreCase))
+        issues.Add($"Expected recommended view '{scenario.Expected.RecommendedView}' but found '{card.RecommendedView ?? "null"}'.");
+
+    foreach (var phrase in scenario.Expected.RequiredAnswerPhrases)
+    {
+        if (!narrative.Answer.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            issues.Add($"Answer did not include required phrase '{phrase}'.");
+    }
+
+    foreach (var phrase in scenario.Expected.RequiredPrimaryFindingPhrases)
+    {
+        if (!card.PrimaryFinding.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            issues.Add($"Primary finding did not include required phrase '{phrase}'.");
+    }
+
+    foreach (var phrase in scenario.Expected.RequiredImpactPhrases)
+    {
+        if (!card.ImpactSummary.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            issues.Add($"Impact summary did not include required phrase '{phrase}'.");
+    }
+
+    foreach (var phrase in scenario.Expected.ForbiddenAnswerPhrases)
+    {
+        if (narrative.Answer.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+            issues.Add($"Answer contained forbidden phrase '{phrase}'.");
+    }
+
+    foreach (var code in scenario.Expected.RequiredFactCodes)
+    {
+        if (!card.KeyFacts.Any(item => string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase)))
+            issues.Add($"Summary card did not include required fact code '{code}'.");
+    }
+
+    if (issues.Count == 0)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException(string.Join(
+        Environment.NewLine,
+        new[]
+        {
+            $"Scenario '{scenario.Id}' failed.",
+            string.IsNullOrWhiteSpace(scenario.Source) ? string.Empty : $"Source: {scenario.Source}",
+            scenario.Artifacts is null ? string.Empty : $"Artifacts: {scenario.Artifacts}",
+            $"Prompt: {scenario.Prompt}",
+            $"Expected recommended view: {scenario.Expected.RecommendedView ?? "null"}",
+            $"Actual recommended view: {card.RecommendedView ?? "null"}",
+            $"Primary finding: {card.PrimaryFinding}",
+            $"Impact summary: {card.ImpactSummary}",
+            $"Answer: {narrative.Answer}",
+            $"Key facts: {string.Join(", ", card.KeyFacts.Select(item => item.Code))}",
+            "Issues:",
+            string.Join(Environment.NewLine, issues.Select(item => $"- {item}"))
+        }.Where(item => !string.IsNullOrWhiteSpace(item))));
+}
+
+static IReadOnlyList<GroundTruthScenario> LoadGroundTruthScenarios()
+{
+    var fixturesRoot = Path.Combine(AppContext.BaseDirectory, "Fixtures");
+
+    if (!Directory.Exists(fixturesRoot))
+        throw new DirectoryNotFoundException($"Ground-truth fixtures directory was not found at '{fixturesRoot}'.");
+
+    var fixturePaths = Directory
+        .EnumerateFiles(fixturesRoot, "*.json", SearchOption.AllDirectories)
+        .Where(path => !Path.GetFileName(path).StartsWith("template", StringComparison.OrdinalIgnoreCase))
+        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    if (fixturePaths.Count == 0)
+        throw new InvalidOperationException($"No ground-truth fixture JSON files were found under '{fixturesRoot}'.");
+
+    var scenarios = new List<GroundTruthScenario>();
+    var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    foreach (var path in fixturePaths)
+    {
+        var json = File.ReadAllText(path);
+        var suite = JsonSerializer.Deserialize<GroundTruthSuite>(json, serializerOptions);
+
+        if (suite is null || suite.Scenarios.Count == 0)
+            throw new InvalidOperationException($"Ground-truth fixture file '{path}' did not contain any scenarios.");
+
+        foreach (var scenario in suite.Scenarios)
+        {
+            if (!scenario.Enabled)
+                continue;
+
+            scenario.Source ??= Path.GetRelativePath(fixturesRoot, path);
+            scenarios.Add(scenario);
+        }
+    }
+
+    return scenarios;
+}
+
+static AiOperationKind ParseOperation(string value) =>
+    value.ToLowerInvariant() switch
+    {
+        "compare" => AiOperationKind.Compare,
+        "recommend" => AiOperationKind.Recommend,
+        "summary" => AiOperationKind.Summary,
+        _ => AiOperationKind.Explain
     };
 
 static SignalTransformRecipe CreateTransforms(string mode = "none", double cutoffHz = 1200d) =>
@@ -546,3 +860,134 @@ static AiResponseComposer CreateResponseComposer(bool enableLlm) =>
             EnableLocalFallback = true
         }),
         NullLogger<AiResponseComposer>.Instance);
+
+internal sealed class GroundTruthSuite
+{
+    public List<GroundTruthScenario> Scenarios { get; init; } = [];
+}
+
+internal sealed class GroundTruthScenario
+{
+    public string ActiveView { get; init; } = "waveform";
+
+    public GroundTruthArtifactsSpec? Artifacts { get; init; }
+
+    public GroundTruthComparisonSpec? Comparison { get; init; }
+
+    public bool Enabled { get; init; } = true;
+
+    public GroundTruthExpectedSpec Expected { get; init; } = new();
+
+    public string Id { get; init; } = string.Empty;
+
+    public string Label { get; init; } = string.Empty;
+
+    public string Operation { get; init; } = "explain";
+
+    public string Prompt { get; init; } = string.Empty;
+
+    public GroundTruthSignalSpec Signal { get; init; } = new();
+
+    public string? Source { get; set; }
+
+    public double? SelectionEndSeconds { get; init; }
+
+    public double? SelectionStartSeconds { get; init; }
+
+    public double? TransformCutoffHz { get; init; }
+
+    public string? TransformMode { get; init; }
+}
+
+internal sealed class GroundTruthArtifactsSpec
+{
+    public string? BaselineAudio { get; init; }
+
+    public string? CandidateAudio { get; init; }
+
+    public string? Notes { get; init; }
+
+    public string? Screenshot { get; init; }
+
+    public override string ToString()
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(BaselineAudio))
+            parts.Add($"baseline={BaselineAudio}");
+
+        if (!string.IsNullOrWhiteSpace(CandidateAudio))
+            parts.Add($"candidate={CandidateAudio}");
+
+        if (!string.IsNullOrWhiteSpace(Screenshot))
+            parts.Add($"screenshot={Screenshot}");
+
+        if (!string.IsNullOrWhiteSpace(Notes))
+            parts.Add($"notes={Notes}");
+
+        return string.Join(", ", parts);
+    }
+}
+
+internal sealed class GroundTruthSignalSpec
+{
+    public double CrestFactorDb { get; init; } = 10d;
+
+    public string DominantBand { get; init; } = "mixed";
+
+    public double DominantFrequencyHz { get; init; } = 220d;
+
+    public double HighBandRatio { get; init; } = 0.2d;
+
+    public double LowBandRatio { get; init; } = 0.2d;
+
+    public double MidBandRatio { get; init; } = 0.6d;
+
+    public int SamplesOverFullScaleCount { get; init; }
+
+    public double SpectralCentroidHz { get; init; }
+
+    public string SpectrogramBand { get; init; } = "mixed";
+
+    public double SpectrogramVariation { get; init; } = 0.18d;
+}
+
+internal sealed class GroundTruthComparisonSpec
+{
+    public double DominantFrequencyDeltaHz { get; init; }
+
+    public double DurationDeltaSeconds { get; init; }
+
+    public string FileId { get; init; } = "file-b";
+
+    public double HighBandEnergyDelta { get; init; }
+
+    public string Kind { get; init; } = "candidate_compare";
+
+    public double LowBandEnergyDelta { get; init; }
+
+    public double PeakDeltaDbFs { get; init; }
+
+    public double RmsDeltaDb { get; init; }
+
+    public string SourcePath { get; init; } = "candidate.wav";
+
+    public double SpectralCentroidDeltaHz { get; init; }
+}
+
+internal sealed class GroundTruthExpectedSpec
+{
+    public List<string> ForbiddenAnswerPhrases { get; init; } = [];
+
+    public string Mode { get; init; } = "single_signal";
+
+    public string? RecommendedView { get; init; }
+
+    public List<string> RequiredAnswerPhrases { get; init; } = [];
+
+    public List<string> RequiredFactCodes { get; init; } = [];
+
+    public List<string> RequiredImpactPhrases { get; init; } = [];
+
+    public List<string> RequiredPrimaryFindingPhrases { get; init; } = [];
+}

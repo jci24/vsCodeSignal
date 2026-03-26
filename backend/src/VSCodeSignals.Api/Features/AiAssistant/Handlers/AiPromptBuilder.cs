@@ -28,6 +28,9 @@ internal sealed class AiPromptBuilder : IAiPromptBuilder
         builder.AppendLine("If this is a recommendation request, pick the single best next supported step and explain why it is useful.");
         builder.AppendLine("If a value is unavailable, omit it instead of calling it out.");
         builder.AppendLine("Treat raw sample counts as supporting evidence, not the main explanation. Prefer percentages or coverage wording when explaining over-full-scale behavior.");
+        builder.AppendLine("If selection scope is not full-file, answer only about that selected region and make the scoped range explicit in the wording.");
+        builder.AppendLine("Write for a non-expert technical user who wants clarity, confidence, and the next best step.");
+        builder.AppendLine("Return a main finding, a plain-language impact summary, one recommended next step, and the best evidence view to inspect.");
         builder.AppendLine("Keep the answer to 2-4 sentences total.");
         builder.AppendLine();
         builder.AppendLine($"Operation: {operation}");
@@ -101,6 +104,7 @@ internal sealed class AiPromptBuilder : IAiPromptBuilder
         builder.AppendLine("If the request is unsupported, return unsupported.");
         builder.AppendLine($"User request: {prompt}");
         builder.AppendLine($"Active view: {context.ActiveView}");
+        builder.AppendLine($"Selection scope: {context.SelectionScope}");
         builder.AppendLine($"Selected file id: {context.SelectedFileId}");
         builder.AppendLine($"Compare file ids: {(context.CompareFileIds.Count == 0 ? "none" : string.Join(", ", context.CompareFileIds))}");
         builder.AppendLine("Supported commands:");
@@ -129,7 +133,7 @@ internal sealed class AiPromptBuilder : IAiPromptBuilder
         new()
         {
             ["type"] = "object",
-            ["required"] = new[] { "headline", "answer", "followUpPrompts" },
+            ["required"] = new[] { "headline", "answer", "primaryFinding", "impactSummary", "recommendedNextStep", "recommendedView", "followUpPrompts" },
             ["additionalProperties"] = false,
             ["properties"] = new Dictionary<string, object?>
             {
@@ -140,6 +144,23 @@ internal sealed class AiPromptBuilder : IAiPromptBuilder
                 ["answer"] = new Dictionary<string, object?>
                 {
                     ["type"] = "string"
+                },
+                ["primaryFinding"] = new Dictionary<string, object?>
+                {
+                    ["type"] = "string"
+                },
+                ["impactSummary"] = new Dictionary<string, object?>
+                {
+                    ["type"] = "string"
+                },
+                ["recommendedNextStep"] = new Dictionary<string, object?>
+                {
+                    ["type"] = "string"
+                },
+                ["recommendedView"] = new Dictionary<string, object?>
+                {
+                    ["type"] = new[] { "string", "null" },
+                    ["enum"] = new object?[] { "waveform", "fft", "spectrogram", null }
                 },
                 ["followUpPrompts"] = new Dictionary<string, object?>
                 {

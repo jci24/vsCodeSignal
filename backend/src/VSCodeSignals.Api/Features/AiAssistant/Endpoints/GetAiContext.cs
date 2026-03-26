@@ -25,6 +25,9 @@ public sealed class GetAiContext(
                 ActiveView = Query<string>("activeView", false) ?? "waveform",
                 CompareFileIds = ParseCompareFileIds(HttpContext.Request.Query["compareFileIds"]),
                 FileId = Query<string>("fileId", false) ?? string.Empty,
+                Selection = ParseSelection(
+                    Query<double?>("startSeconds", false),
+                    Query<double?>("endSeconds", false)),
                 WorkspaceId = Route<string>("workspaceId") ?? WorkspaceImportStore.CurrentWorkspaceId
             };
 
@@ -51,4 +54,16 @@ public sealed class GetAiContext(
             .SelectMany(value => value!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+    private static SelectionRangeDto? ParseSelection(double? startSeconds, double? endSeconds)
+    {
+        if (startSeconds is null && endSeconds is null)
+            return null;
+
+        return new SelectionRangeDto
+        {
+            EndSeconds = endSeconds,
+            StartSeconds = startSeconds
+        };
+    }
 }

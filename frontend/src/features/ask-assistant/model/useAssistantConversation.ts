@@ -38,6 +38,8 @@ function buildContextKey(context: IAssistantWorkspaceContextRequest | null): str
     context.fileId,
     context.activeView,
     [...context.compareFileIds].sort().join(','),
+    context.selection?.startSeconds ?? '',
+    context.selection?.endSeconds ?? '',
     serializeTransformRecipe(context.transforms),
   ].join(':')
 }
@@ -62,7 +64,15 @@ export function useAssistantConversation({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false)
   const contextKey = useMemo(() => buildContextKey(context), [context])
   const contextRef = useRef<IAssistantWorkspaceContextRequest | null>(context)
-  const fileScopeKey = context ? `${context.workspaceId}:${context.fileId}` : 'none'
+  const fileScopeKey = context
+    ? [
+        context.workspaceId,
+        context.fileId,
+        [...context.compareFileIds].sort().join(','),
+        context.selection?.startSeconds ?? '',
+        context.selection?.endSeconds ?? '',
+      ].join(':')
+    : 'none'
   const previousFileScopeKeyRef = useRef(fileScopeKey)
 
   useEffect(() => {

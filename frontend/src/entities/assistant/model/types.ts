@@ -152,7 +152,12 @@ export interface IAiFollowUpPrompt {
 export interface IAiSummaryCard {
   keyFacts: IEvidenceItem[]
   limitations: string[]
+  mode: 'single_signal' | 'comparison'
   nextSteps: string[]
+  primaryFinding: string
+  impactSummary: string
+  recommendedNextStep: string
+  recommendedView?: AssistantAnalysisView | null
   summary: string
   title: string
   topObservations: IObservation[]

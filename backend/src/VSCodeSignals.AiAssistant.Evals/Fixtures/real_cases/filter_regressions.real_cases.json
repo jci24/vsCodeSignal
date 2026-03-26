@@ -1,0 +1,64 @@
+{
+  "scenarios": [
+    {
+      "enabled": false,
+      "id": "post_filter_low_end_removed",
+      "label": "High-pass filter removes too much low-end energy",
+      "prompt": "What changed after the filter?",
+      "operation": "compare",
+      "activeView": "fft",
+      "artifacts": {
+        "baselineAudio": "assets/post_filter_low_end_removed/baseline.wav",
+        "candidateAudio": "assets/post_filter_low_end_removed/candidate.wav",
+        "notes": "assets/post_filter_low_end_removed/notes.md",
+        "screenshot": "assets/post_filter_low_end_removed/screenshot.png"
+      },
+      "transformMode": "highpass",
+      "transformCutoffHz": 80.0,
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 310.0,
+        "spectralCentroidHz": 1040.0,
+        "crestFactorDb": 11.8,
+        "highBandRatio": 0.31,
+        "lowBandRatio": 0.14,
+        "midBandRatio": 0.55,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.22
+      },
+      "comparison": {
+        "kind": "transform_baseline",
+        "fileId": "file-a",
+        "sourcePath": "baseline.wav",
+        "rmsDeltaDb": -1.6,
+        "peakDeltaDbFs": -0.6,
+        "dominantFrequencyDeltaHz": 0.0,
+        "spectralCentroidDeltaHz": 220.0,
+        "lowBandEnergyDelta": -0.15,
+        "highBandEnergyDelta": 0.11,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "low-end",
+          "-1.6 dB"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "low-end"
+        ],
+        "requiredImpactPhrases": [
+          "tonal balance"
+        ],
+        "requiredFactCodes": [
+          "TRANSFORM_BASELINE_RMS"
+        ],
+        "forbiddenAnswerPhrases": [
+          "I could not map that request"
+        ]
+      }
+    }
+  ]
+}

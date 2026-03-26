@@ -13,7 +13,9 @@ public sealed class ObservationService : IObservationService
         var observations = new List<ObservationDto>();
         var limitations = new List<string>
         {
-            "Analysis is based on a mono decode at 22.05 kHz for the full file.",
+            context.IsSelectionApplied
+                ? $"Analysis is based on a mono decode at 22.05 kHz for {context.SelectionScope}."
+                : "Analysis is based on a mono decode at 22.05 kHz for the full file.",
             "The MVP reports decoded sample metrics and FFT-derived features only. It does not currently estimate true peak or run a dedicated clipping detector."
         };
         var recommendedActions = new List<string>();
@@ -180,6 +182,21 @@ public sealed class ObservationService : IObservationService
 
                 AddBandShiftObservation("COMPARE", comparison, observations);
 
+                if (comparison.HighBandEnergyDelta >= 0.10d &&
+                    comparison.SpectralCentroidDeltaHz >= 180d &&
+                    Math.Abs(comparison.DominantFrequencyDeltaHz) < 120d)
+                {
+                    observations.Add(CreateObservation(
+                        code: $"COMPARE_NOISE_FLOOR_LIKELY_{comparison.FileId}",
+                        message: $"{comparison.SourcePath} carries more upper-band energy, which is consistent with a raised background noise floor or added hiss relative to the selected file.",
+                        severity: "info",
+                        basis: "derived",
+                        confidence: "medium",
+                        evidenceCodes: comparison.Facts.Select(item => item.Code).ToList()));
+
+                    recommendedActions.Add("Inspect a quieter section in FFT or spectrogram to confirm whether the extra upper-band energy behaves like persistent background noise.");
+                }
+
                 if (Math.Abs(comparison.DurationDeltaSeconds) >= 0.2d)
                 {
                     observations.Add(CreateObservation(
@@ -187,6 +204,23 @@ public sealed class ObservationService : IObservationService
                         message: $"{comparison.SourcePath} differs in duration by {FormatSigned(comparison.DurationDeltaSeconds)} seconds versus the selected file.",
                         severity: "info",
                         basis: "measured",
+                        confidence: "high",
+                        evidenceCodes: comparison.Facts.Select(item => item.Code).ToList()));
+                }
+
+                if (Math.Abs(comparison.RmsDeltaDb) < 0.25d &&
+                    Math.Abs(comparison.PeakDeltaDbFs) < 0.25d &&
+                    Math.Abs(comparison.DominantFrequencyDeltaHz) < 20d &&
+                    Math.Abs(comparison.SpectralCentroidDeltaHz) < 40d &&
+                    Math.Abs(comparison.LowBandEnergyDelta) < 0.03d &&
+                    Math.Abs(comparison.HighBandEnergyDelta) < 0.03d &&
+                    Math.Abs(comparison.DurationDeltaSeconds) < 0.1d)
+                {
+                    observations.Add(CreateObservation(
+                        code: $"COMPARE_NO_MATERIAL_DIFFERENCE_{comparison.FileId}",
+                        message: $"{comparison.SourcePath} is closely matched to the selected file, with no strong measured difference standing out.",
+                        severity: "info",
+                        basis: "derived",
                         confidence: "high",
                         evidenceCodes: comparison.Facts.Select(item => item.Code).ToList()));
                 }
@@ -212,8 +246,8 @@ public sealed class ObservationService : IObservationService
             limitations.Add("Active transforms can change level and duration metrics, so interpret them as post-transform values for the selected file.");
         }
 
-        if (context.Selection is not null)
-            limitations.Add("Selected-range context is captured in the contract but not yet applied to DSP analysis in this MVP.");
+        if (context.IsSelectionApplied)
+            recommendedActions.Add("Reset AI scope to the full file if you want to compare this selected region against the overall signal.");
 
         if (recommendedActions.Count == 0)
             recommendedActions.Add("Ask a narrower question about level, dominant frequency, or transform impact to get a more targeted explanation.");

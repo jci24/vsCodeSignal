@@ -1,0 +1,64 @@
+{
+  "scenarios": [
+    {
+      "enabled": false,
+      "id": "hardware_level_drop_reference_vs_candidate",
+      "label": "Candidate run comes back quieter than the known-good reference",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "artifacts": {
+        "baselineAudio": "assets/hardware_level_drop_reference_vs_candidate/baseline.wav",
+        "candidateAudio": "assets/hardware_level_drop_reference_vs_candidate/candidate.wav",
+        "notes": "assets/hardware_level_drop_reference_vs_candidate/notes.md",
+        "screenshot": "assets/hardware_level_drop_reference_vs_candidate/screenshot.png"
+      },
+      "transformMode": "none",
+      "transformCutoffHz": 1200.0,
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 280.0,
+        "spectralCentroidHz": 900.0,
+        "crestFactorDb": 10.5,
+        "highBandRatio": 0.23,
+        "lowBandRatio": 0.21,
+        "midBandRatio": 0.56,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.16
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "candidate-run",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": -2.1,
+        "peakDeltaDbFs": -1.2,
+        "dominantFrequencyDeltaHz": 8.0,
+        "spectralCentroidDeltaHz": -25.0,
+        "lowBandEnergyDelta": 0.01,
+        "highBandEnergyDelta": -0.02,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "waveform",
+        "requiredAnswerPhrases": [
+          "quieter",
+          "-2.1 dB RMS"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "quieter"
+        ],
+        "requiredImpactPhrases": [
+          "level changed"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_RMS_candidate-run"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    }
+  ]
+}

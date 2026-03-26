@@ -1,5 +1,6 @@
 import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 
+import { ComparePage } from '@/pages/compare/ui/compare-page'
 import { InvestigationsPage } from '@/pages/investigations/ui/investigations-page'
 import { PipelinesPage } from '@/pages/pipelines/ui/pipelines-page'
 import { ReportsPage } from '@/pages/reports/ui/reports-page'
@@ -12,12 +13,20 @@ export const appRoutes: RouteObject[] = [
   {
     children: [
       {
-        element: <WorkspacePage />,
+        element: <ComparePage />,
         handle: {
-          description: 'Workspace overview, imports, and session-level coordination.',
-          title: 'Workspace',
+          description: 'AI-guided baseline versus candidate comparison with plain-language findings.',
+          title: 'Compare',
         },
         path: '/',
+      },
+      {
+        element: <WorkspacePage />,
+        handle: {
+          description: 'Deeper technical inspection with full manual controls and expert workflows.',
+          title: 'Inspect',
+        },
+        path: '/inspect',
       },
       {
         element: <SignalsPage />,

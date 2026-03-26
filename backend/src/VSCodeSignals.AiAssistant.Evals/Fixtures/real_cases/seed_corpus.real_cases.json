@@ -1,0 +1,384 @@
+{
+  "scenarios": [
+    {
+      "enabled": true,
+      "id": "seed_compare_candidate_tonal_shift",
+      "label": "Generated candidate run gets quieter and shifts upward in dominant frequency",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "artifacts": {
+        "baselineAudio": "assets/seed_compare_candidate_tonal_shift/baseline.wav",
+        "candidateAudio": "assets/seed_compare_candidate_tonal_shift/candidate.wav",
+        "notes": "assets/seed_compare_candidate_tonal_shift/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 320.0,
+        "spectralCentroidHz": 920.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.26,
+        "lowBandRatio": 0.22,
+        "midBandRatio": 0.52,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "file-b",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": -1.8,
+        "peakDeltaDbFs": -0.9,
+        "dominantFrequencyDeltaHz": 190.0,
+        "spectralCentroidDeltaHz": 260.0,
+        "lowBandEnergyDelta": -0.12,
+        "highBandEnergyDelta": 0.14,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "candidate.wav differs by -1.8 dB RMS",
+          "shifts the dominant FFT bin by +190.0 Hz"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "candidate.wav differs by -1.8 dB RMS"
+        ],
+        "requiredImpactPhrases": [
+          "tonal balance shifted"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_RMS_file-b",
+          "COMPARE_SPECTRAL_CENTROID_file-b"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "id": "seed_compare_transform_after_filter",
+      "label": "Generated high-pass transform drops level and leaves headroom trouble",
+      "prompt": "What changed after the filter?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "transformMode": "highpass",
+      "transformCutoffHz": 80.0,
+      "artifacts": {
+        "baselineAudio": "assets/seed_compare_transform_after_filter/baseline.wav",
+        "candidateAudio": "assets/seed_compare_transform_after_filter/candidate.wav",
+        "notes": "assets/seed_compare_transform_after_filter/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 320.0,
+        "spectralCentroidHz": 920.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.26,
+        "lowBandRatio": 0.22,
+        "midBandRatio": 0.52,
+        "samplesOverFullScaleCount": 500,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "comparison": {
+        "kind": "transform_baseline",
+        "fileId": "file-a",
+        "sourcePath": "sample.wav",
+        "rmsDeltaDb": -1.4,
+        "peakDeltaDbFs": -0.8,
+        "dominantFrequencyDeltaHz": 0.0,
+        "spectralCentroidDeltaHz": 240.0,
+        "lowBandEnergyDelta": -0.11,
+        "highBandEnergyDelta": 0.12,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "After the current transforms, RMS changed by -1.4 dB",
+          "decode is running over full scale"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "After the current transforms, RMS changed by -1.4 dB"
+        ],
+        "requiredImpactPhrases": [
+          "decode is still over full scale"
+        ],
+        "requiredFactCodes": [
+          "TRANSFORM_BASELINE_RMS",
+          "TRANSFORM_BASELINE_SPECTRAL_CENTROID"
+        ],
+        "forbiddenAnswerPhrases": [
+          "I could not map that request"
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "id": "seed_explain_spectrogram_variation",
+      "label": "Generated spectrogram with sustained high-band bursts",
+      "prompt": "Explain this spectrogram",
+      "operation": "explain",
+      "activeView": "spectrogram",
+      "artifacts": {
+        "baselineAudio": "assets/seed_explain_spectrogram_variation/signal.wav",
+        "notes": "assets/seed_explain_spectrogram_variation/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 640.0,
+        "spectralCentroidHz": 0.0,
+        "crestFactorDb": 11.0,
+        "highBandRatio": 0.22,
+        "lowBandRatio": 0.18,
+        "midBandRatio": 0.60,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "high",
+        "spectrogramVariation": 0.44
+      },
+      "expected": {
+        "mode": "single_signal",
+        "recommendedView": "spectrogram",
+        "requiredAnswerPhrases": [
+          "most sustained energy sits in the high band",
+          "Energy changes noticeably over time"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "most sustained energy sits in the high band"
+        ],
+        "requiredImpactPhrases": [
+          "stable versus time-varying energy changes"
+        ],
+        "requiredFactCodes": [
+          "SPECTROGRAM_DOMINANT_BAND",
+          "SPECTROGRAM_TEMPORAL_VARIATION"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "id": "seed_explain_waveform_headroom_coverage",
+      "label": "Generated waveform with obvious headroom coverage problem",
+      "prompt": "Explain this signal",
+      "operation": "explain",
+      "activeView": "waveform",
+      "artifacts": {
+        "baselineAudio": "assets/seed_explain_waveform_headroom_coverage/signal.wav",
+        "notes": "assets/seed_explain_waveform_headroom_coverage/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 209.9,
+        "spectralCentroidHz": 0.0,
+        "crestFactorDb": 12.6,
+        "highBandRatio": 0.24,
+        "lowBandRatio": 0.20,
+        "midBandRatio": 0.56,
+        "samplesOverFullScaleCount": 101644,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.18
+      },
+      "expected": {
+        "mode": "single_signal",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "headroom is the main issue",
+          "% of analyzed points"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "headroom is the main standout"
+        ],
+        "requiredImpactPhrases": [
+          "level/headroom problems"
+        ],
+        "requiredFactCodes": [
+          "OVER_FULL_SCALE_SHARE",
+          "SAMPLE_PEAK_DBFS"
+        ],
+        "forbiddenAnswerPhrases": [
+          "101,644 samples",
+          "101,644 decoded samples"
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "id": "seed_compare_trimmed_intro_duration",
+      "label": "Generated candidate removes a half-second trimmed intro",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "artifacts": {
+        "baselineAudio": "assets/seed_trimmed_intro_example/baseline.wav",
+        "candidateAudio": "assets/seed_trimmed_intro_example/candidate.wav",
+        "notes": "assets/seed_trimmed_intro_example/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 180.0,
+        "spectralCentroidHz": 780.0,
+        "crestFactorDb": 10.2,
+        "highBandRatio": 0.18,
+        "lowBandRatio": 0.26,
+        "midBandRatio": 0.56,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.14
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "trimmed-candidate",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": 0.0,
+        "peakDeltaDbFs": 0.0,
+        "dominantFrequencyDeltaHz": 0.0,
+        "spectralCentroidDeltaHz": 0.0,
+        "lowBandEnergyDelta": 0.0,
+        "highBandEnergyDelta": 0.0,
+        "durationDeltaSeconds": -0.5
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "waveform",
+        "requiredAnswerPhrases": [
+          "differs in duration by -0.5 seconds"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "differs in duration by -0.5 seconds"
+        ],
+        "requiredImpactPhrases": [
+          "timing or trimming changed"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_DURATION_trimmed-candidate"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "id": "seed_compare_no_change_control",
+      "label": "Generated baseline and candidate are intentionally identical",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "waveform",
+      "artifacts": {
+        "baselineAudio": "assets/seed_no_change_control/baseline.wav",
+        "candidateAudio": "assets/seed_no_change_control/candidate.wav",
+        "notes": "assets/seed_no_change_control/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 145.0,
+        "spectralCentroidHz": 620.0,
+        "crestFactorDb": 10.5,
+        "highBandRatio": 0.17,
+        "lowBandRatio": 0.29,
+        "midBandRatio": 0.54,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.10
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "matching-candidate",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": 0.0,
+        "peakDeltaDbFs": 0.0,
+        "dominantFrequencyDeltaHz": 0.0,
+        "spectralCentroidDeltaHz": 0.0,
+        "lowBandEnergyDelta": 0.0,
+        "highBandEnergyDelta": 0.0,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "waveform",
+        "requiredAnswerPhrases": [
+          "closely matched",
+          "no strong measured difference"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "closely matched"
+        ],
+        "requiredImpactPhrases": [
+          "closely matched"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_RMS_matching-candidate"
+        ],
+        "forbiddenAnswerPhrases": [
+          "differs by +0.0 dB RMS"
+        ]
+      }
+    },
+    {
+      "enabled": true,
+      "id": "seed_compare_noise_floor_increase",
+      "label": "Generated candidate adds broadband noise and hiss-like upper energy",
+      "prompt": "What changed between the reference run and the new run?",
+      "operation": "compare",
+      "activeView": "fft",
+      "artifacts": {
+        "baselineAudio": "assets/seed_noise_floor_increase/baseline.wav",
+        "candidateAudio": "assets/seed_noise_floor_increase/candidate.wav",
+        "notes": "assets/seed_noise_floor_increase/notes.md"
+      },
+      "signal": {
+        "dominantBand": "mid",
+        "dominantFrequencyHz": 170.0,
+        "spectralCentroidHz": 760.0,
+        "crestFactorDb": 10.8,
+        "highBandRatio": 0.12,
+        "lowBandRatio": 0.28,
+        "midBandRatio": 0.60,
+        "samplesOverFullScaleCount": 0,
+        "spectrogramBand": "mid",
+        "spectrogramVariation": 0.16
+      },
+      "comparison": {
+        "kind": "candidate_compare",
+        "fileId": "noisy-candidate",
+        "sourcePath": "candidate.wav",
+        "rmsDeltaDb": 0.3,
+        "peakDeltaDbFs": 0.2,
+        "dominantFrequencyDeltaHz": 15.0,
+        "spectralCentroidDeltaHz": 260.0,
+        "lowBandEnergyDelta": -0.09,
+        "highBandEnergyDelta": 0.16,
+        "durationDeltaSeconds": 0.0
+      },
+      "expected": {
+        "mode": "comparison",
+        "recommendedView": "fft",
+        "requiredAnswerPhrases": [
+          "raised background noise floor",
+          "added hiss"
+        ],
+        "requiredPrimaryFindingPhrases": [
+          "raised background noise floor"
+        ],
+        "requiredImpactPhrases": [
+          "tonal balance shifted"
+        ],
+        "requiredFactCodes": [
+          "COMPARE_SPECTRAL_CENTROID_noisy-candidate",
+          "COMPARE_HIGH_BAND_noisy-candidate"
+        ],
+        "forbiddenAnswerPhrases": [
+          "No comparison is active yet."
+        ]
+      }
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import type { JSX } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   BotMessageSquare,
   CircleAlert,
@@ -11,6 +11,7 @@ import {
   RefreshCw,
   SlidersHorizontal,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 
 import { CompareControls } from '@/features/compare-mode/components/CompareControls/CompareControls'
 import { useCompareSelection } from '@/features/compare-mode/hooks/useCompareSelection'
@@ -25,6 +26,7 @@ import { WaveformPanel } from '@/features/waveform/components/WaveformPanel/Wave
 import { Button } from '@/shared/ui/button'
 import { LoadingSpinner } from '@/shared/ui/loading-spinner'
 import { AssistantPanel } from '@/widgets/assistant-panel/ui/AssistantPanel'
+import type { ISelectionRange } from '@/entities/assistant/model/types'
 
 import { AudioPreviewPlayer } from '../components/AudioPreviewPlayer/AudioPreviewPlayer'
 import { useWorkspaceImports } from '../hooks/useWorkspaceImports'
@@ -54,9 +56,13 @@ type AnalysisView = (typeof ANALYSIS_TABS)[number]['id']
 type SidebarPanel = 'ai' | 'details' | 'filtering' | 'metrics' | 'transforms' | null
 
 export function WorkspacePage(): JSX.Element {
+  const [searchParams] = useSearchParams()
   const [activeView, setActiveView] = useState<AnalysisView>('waveform')
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>(null)
   const [isInspectRailCollapsed, setIsInspectRailCollapsed] = useState(true)
+  const [isAiScopeSelectionEnabled, setIsAiScopeSelectionEnabled] = useState(false)
+  const [aiScopeStartInput, setAiScopeStartInput] = useState('0')
+  const [aiScopeEndInput, setAiScopeEndInput] = useState('')
   const {
     batches,
     errorMessage,
@@ -68,6 +74,15 @@ export function WorkspacePage(): JSX.Element {
     selectFile,
     workspaceId,
   } = useWorkspaceImports()
+  const requestedCompareFileIdsParam = searchParams.get('compareFileIds') ?? ''
+  const hasRequestedCompareIds = searchParams.has('compareFileIds')
+  const requestedCompareFileIds = requestedCompareFileIdsParam
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  const requestedView = searchParams.get('view')
+  const requestedScopeStart = searchParams.get('startSeconds')
+  const requestedScopeEnd = searchParams.get('endSeconds')
   const importedFiles = batches.flatMap((batch) => batch.importedFiles)
   const comparableFiles = selectedFile
     ? importedFiles.filter((file) => file.signalKind === selectedFile.signalKind)
@@ -97,11 +112,69 @@ export function WorkspacePage(): JSX.Element {
     setNormalize,
     setTrimSilence,
   } = useSignalTransforms(selectedFile?.id ?? null)
+  const aiScopeDurationSeconds = selectedFile?.durationSeconds ?? null
+  const aiScopeState = resolveAiSelectionScope(
+    isAiScopeSelectionEnabled,
+    aiScopeDurationSeconds,
+    aiScopeStartInput,
+    aiScopeEndInput,
+  )
+  const assistantSelection = aiScopeState.selection
+  const aiScopeSummary = assistantSelection
+    ? `${formatAiScopeInput(assistantSelection.startSeconds)}s to ${formatAiScopeInput(assistantSelection.endSeconds)}s`
+    : 'the full file'
+
+  useEffect(() => {
+    setIsAiScopeSelectionEnabled(false)
+    setAiScopeStartInput('0')
+    setAiScopeEndInput(formatAiScopeInput(selectedFile?.durationSeconds ?? null))
+  }, [selectedFile?.id, selectedFile?.durationSeconds])
+
+  useEffect(() => {
+    if (!selectedFile) {
+      return
+    }
+
+    if (requestedView === 'waveform' || requestedView === 'fft' || requestedView === 'spectrogram') {
+      setActiveView(requestedView)
+    }
+  }, [requestedView, selectedFile?.id])
+
+  useEffect(() => {
+    if (!selectedFile) {
+      return
+    }
+
+    if (requestedCompareFileIds.length > 0) {
+      replaceComparisonIds(requestedCompareFileIds)
+      return
+    }
+
+    if (hasRequestedCompareIds) {
+      replaceComparisonIds([])
+    }
+  }, [hasRequestedCompareIds, replaceComparisonIds, requestedCompareFileIdsParam, selectedFile?.id])
+
+  useEffect(() => {
+    if (!selectedFile) {
+      return
+    }
+
+    if (requestedScopeStart === null && requestedScopeEnd === null) {
+      return
+    }
+
+    setIsAiScopeSelectionEnabled(true)
+    setAiScopeStartInput(requestedScopeStart ?? '0')
+    setAiScopeEndInput(
+      requestedScopeEnd ?? formatAiScopeInput(selectedFile.durationSeconds ?? null),
+    )
+  }, [requestedScopeEnd, requestedScopeStart, selectedFile?.durationSeconds, selectedFile?.id])
 
   if (isLoading) {
     return (
-      <div className={styles.state}>
-        <p className={styles.stateEyebrow}>Workspace</p>
+        <div className={styles.state}>
+        <p className={styles.stateEyebrow}>Inspect</p>
         <LoadingSpinner className={styles.loadingSpinner} label="Loading imports" size="lg" />
         <p className={styles.stateCopy}>
           Pulling the current workspace snapshot from the backend.
@@ -113,7 +186,7 @@ export function WorkspacePage(): JSX.Element {
   if (errorMessage) {
     return (
       <div className={styles.state}>
-        <p className={styles.stateEyebrow}>Workspace</p>
+        <p className={styles.stateEyebrow}>Inspect</p>
         <h3 className={styles.stateTitle}>Imports unavailable</h3>
         <p className={styles.stateCopy}>{errorMessage}</p>
         <Button onClick={() => void reloadWorkspace()} type="button" variant="outline">
@@ -452,6 +525,77 @@ export function WorkspacePage(): JSX.Element {
                     </div>
                   </div>
 
+                  {isAudioFile ? (
+                    <div className={styles.aiScopeCard}>
+                      <div className={styles.aiScopeInfo}>
+                        <p className={styles.sectionEyebrow}>AI scope</p>
+                        <p className={styles.aiScopeHint}>
+                          Assistant answers are grounded in {aiScopeSummary}.
+                        </p>
+                      </div>
+
+                      <div className={styles.aiScopeControls}>
+                        <div className={styles.aiScopeToggleGroup}>
+                          <button
+                            className={styles.aiScopeToggleButton}
+                            data-active={!isAiScopeSelectionEnabled}
+                            onClick={() => setIsAiScopeSelectionEnabled(false)}
+                            type="button"
+                          >
+                            Full file
+                          </button>
+                          <button
+                            className={styles.aiScopeToggleButton}
+                            data-active={isAiScopeSelectionEnabled}
+                            disabled={!aiScopeDurationSeconds}
+                            onClick={() => setIsAiScopeSelectionEnabled(true)}
+                            type="button"
+                          >
+                            Selected region
+                          </button>
+                        </div>
+
+                        {isAiScopeSelectionEnabled ? (
+                          <div className={styles.aiScopeInputs}>
+                            <label className={styles.aiScopeField}>
+                              <span>Start</span>
+                              <input
+                                aria-invalid={aiScopeState.validationMessage ? 'true' : 'false'}
+                                className={styles.aiScopeInput}
+                                max={aiScopeDurationSeconds ?? undefined}
+                                min={0}
+                                onChange={(event) => setAiScopeStartInput(event.target.value)}
+                                step="0.1"
+                                type="number"
+                                value={aiScopeStartInput}
+                              />
+                            </label>
+
+                            <label className={styles.aiScopeField}>
+                              <span>End</span>
+                              <input
+                                aria-invalid={aiScopeState.validationMessage ? 'true' : 'false'}
+                                className={styles.aiScopeInput}
+                                max={aiScopeDurationSeconds ?? undefined}
+                                min={0}
+                                onChange={(event) => setAiScopeEndInput(event.target.value)}
+                                step="0.1"
+                                type="number"
+                                value={aiScopeEndInput}
+                              />
+                            </label>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {isAiScopeSelectionEnabled && aiScopeState.validationMessage ? (
+                        <p className={styles.aiScopeValidation}>
+                          {aiScopeState.validationMessage}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div
                     className={styles.previewContent}
                     data-compare={isCompareMode ? 'true' : 'false'}
@@ -671,6 +815,7 @@ export function WorkspacePage(): JSX.Element {
                           isBriefingCollapsed={isInspectRailCollapsed}
                           onApplyWorkspacePatch={applyAssistantWorkspacePatch}
                           onRequestCollapseRail={() => setIsInspectRailCollapsed(true)}
+                          selection={assistantSelection}
                           transforms={selectedFileTransforms ?? activeTransforms}
                           workspaceId={workspaceId}
                         />
@@ -781,6 +926,69 @@ function formatDuration(value: number | null): string {
   }
 
   return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
+}
+
+function formatAiScopeInput(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return ''
+  }
+
+  return value
+    .toFixed(value >= 10 ? 1 : 2)
+    .replace(/\.0+$/, '')
+    .replace(/(\.\d*[1-9])0+$/, '$1')
+}
+
+function resolveAiSelectionScope(
+  enabled: boolean,
+  durationSeconds: number | null,
+  startInput: string,
+  endInput: string,
+): {
+  selection: ISelectionRange | null
+  validationMessage: string | null
+} {
+  if (!enabled) {
+    return {
+      selection: null,
+      validationMessage: null,
+    }
+  }
+
+  if (durationSeconds === null || Number.isNaN(durationSeconds) || durationSeconds <= 0) {
+    return {
+      selection: null,
+      validationMessage: 'Selected-region scope is unavailable for this file.',
+    }
+  }
+
+  const startSeconds = Number.parseFloat(startInput)
+  const endSeconds = Number.parseFloat(endInput)
+
+  if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds)) {
+    return {
+      selection: null,
+      validationMessage: 'Enter both a start and end time for the AI scope.',
+    }
+  }
+
+  const clampedStart = Math.min(Math.max(startSeconds, 0), durationSeconds)
+  const clampedEnd = Math.min(Math.max(endSeconds, 0), durationSeconds)
+
+  if (clampedEnd <= clampedStart) {
+    return {
+      selection: null,
+      validationMessage: 'End time must be greater than start time.',
+    }
+  }
+
+  return {
+    selection: {
+      endSeconds: Number(clampedEnd.toFixed(4)),
+      startSeconds: Number(clampedStart.toFixed(4)),
+    },
+    validationMessage: null,
+  }
 }
 
 function formatSampleRate(value: number | null): string {
