@@ -42,6 +42,8 @@ const VIEW_OPTIONS: Array<{ id: AssistantAnalysisView; label: string }> = [
 
 export function ComparePage(): JSX.Element {
   const scrollRootRef = useRef<HTMLDivElement | null>(null)
+  const followUpSectionRef = useRef<HTMLElement | null>(null)
+  const actionSectionRef = useRef<HTMLElement | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeView, setActiveView] = useState<AssistantAnalysisView>('waveform')
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
@@ -265,6 +267,14 @@ export function ComparePage(): JSX.Element {
       return
     }
 
+    setIsFollowUpExpanded(true)
+    window.requestAnimationFrame(() => {
+      followUpSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+
     if (isActionLike(prompt)) {
       await handlePlanPrompt(prompt)
       return
@@ -375,6 +385,19 @@ export function ComparePage(): JSX.Element {
       window.cancelAnimationFrame(frameId)
     }
   }, [hasComparePair, summaryCard?.primaryFinding])
+
+  useEffect(() => {
+    if (!proposal && !executionResponse) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      actionSectionRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    })
+  }, [executionResponse, proposal])
 
   if (isLoading) {
     return (
@@ -580,7 +603,7 @@ export function ComparePage(): JSX.Element {
   ) : null
 
   const followUpSection = showFollowUpPanel ? (
-    <section>
+    <section ref={followUpSectionRef}>
       <Card className="rounded-[1.55rem] border border-border/70 bg-background/92 shadow-[0_14px_38px_-34px_rgba(15,23,42,0.2)]">
         <CardContent className="space-y-4 p-4 md:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -618,13 +641,14 @@ export function ComparePage(): JSX.Element {
             onSubmit={async (prompt) => {
               await handleGuidedStep(prompt)
             }}
+            scrollable
             title="Keep the answer moving"
           />
         </CardContent>
       </Card>
     </section>
   ) : hasComparePair && hasResolvedSummary ? (
-    <section>
+    <section ref={followUpSectionRef}>
       <Card className="rounded-[1.4rem] border border-border/70 bg-background/88 shadow-[0_12px_30px_-30px_rgba(15,23,42,0.14)]">
         <CardContent className="flex flex-wrap items-center justify-between gap-4 p-4 md:px-6">
           <div className="space-y-2">
@@ -982,7 +1006,7 @@ export function ComparePage(): JSX.Element {
             </Card>
           </section>
 
-          <section className="grid gap-4">
+          <section className="grid gap-4" ref={actionSectionRef}>
             {(proposal || executionResponse) ? (
               <div className="grid gap-4 xl:grid-cols-2">
                 <AssistantActionProposal
