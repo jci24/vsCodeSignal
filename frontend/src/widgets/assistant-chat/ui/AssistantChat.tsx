@@ -81,7 +81,7 @@ export function AssistantChat({
             key={message.id}
           >
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              {message.role === 'user' ? 'You' : 'Assistant'}
+              {message.role === 'user' ? 'You' : message.isPreview ? 'Assistant (first pass)' : 'Assistant'}
             </p>
             <p className="break-words whitespace-pre-wrap leading-6">{message.content}</p>
           </article>
@@ -93,7 +93,9 @@ export function AssistantChat({
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             Assistant
           </p>
-          <p className="break-words whitespace-pre-wrap leading-6 text-muted-foreground">Working on it…</p>
+          <p className="break-words whitespace-pre-wrap leading-6 text-muted-foreground">
+            {messages.some((message) => message.isPreview) ? 'Refining the answer…' : 'Working on it…'}
+          </p>
         </article>
       ) : null}
     </div>
