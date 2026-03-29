@@ -1,5 +1,30 @@
 **/bin/
 **/obj/
 .DS_Store
+
+# Editor files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Python caches and local envs
 backend/.venv/
 **/__pycache__/
+**/.pytest_cache/
+**/*.pyc
+**/.mypy_cache/
+
+# Frontend local artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/.env
+frontend/.env.*
+frontend/*.local
+
+# Coverage and local data
+.coverage
+coverage/
+**/*.db
+**/*.sqlite*
