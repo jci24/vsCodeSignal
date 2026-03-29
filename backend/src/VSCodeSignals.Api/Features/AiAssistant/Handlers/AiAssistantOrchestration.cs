@@ -158,6 +158,20 @@ internal sealed class AiResponseComposer(
         return fallback;
     }
 
+    public AiNarrativeResult BuildGroundedNarrative(
+        AiOperationKind operation,
+        WorkspaceContextDto context,
+        SignalSummaryDto signalSummary,
+        ComparisonSummaryDto? comparisonSummary,
+        ObservationBundle observationBundle) =>
+        BuildFallbackNarrative(
+            operation,
+            context,
+            signalSummary,
+            comparisonSummary,
+            observationBundle,
+            usedFallback: false);
+
     private static IReadOnlyList<string> ResolveProviderAttemptOrder(ModelRouteDecision route)
     {
         if (route.AllowLocalFallback &&
@@ -221,7 +235,8 @@ internal sealed class AiResponseComposer(
         WorkspaceContextDto context,
         SignalSummaryDto signalSummary,
         ComparisonSummaryDto? comparisonSummary,
-        ObservationBundle observationBundle)
+        ObservationBundle observationBundle,
+        bool usedFallback = true)
     {
         var headline = GetDefaultHeadline(operation, context.ActiveView);
         string answer;
@@ -258,7 +273,7 @@ internal sealed class AiResponseComposer(
             PrimaryFinding = primaryFinding,
             RecommendedNextStep = observationBundle.RecommendedActions.FirstOrDefault() ?? "Inspect the current evidence and ask a narrower follow-up question.",
             RecommendedView = PickRecommendedView(context, observationBundle.Observations, comparisonSummary),
-            UsedFallback = true
+            UsedFallback = usedFallback
         };
     }
 
@@ -1122,18 +1137,12 @@ internal sealed class AiAssistantService(
         var operation = comparisonSummary is not null && comparisonSummary.Comparisons.Count > 0
             ? AiOperationKind.Compare
             : AiOperationKind.Summary;
-        var summaryPrompt = operation == AiOperationKind.Compare
-            ? "Provide a first-pass comparison summary of the baseline and candidate signals."
-            : "Provide a first-pass summary of the current signal workspace state.";
-        var narrative = await responseComposer.GenerateNarrativeAsync(
+        var narrative = responseComposer.BuildGroundedNarrative(
             operation,
             context,
             signalSummary,
             comparisonSummary,
-            observationBundle,
-            summaryPrompt,
-            [],
-            ct);
+            observationBundle);
 
         return responseComposer.BuildSummaryCard(operation, context, narrative, signalSummary, comparisonSummary, observationBundle);
     }

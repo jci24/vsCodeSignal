@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using System.Globalization;
 using VSCodeSignals.Api.Features.AiAssistant.Common;
 using VSCodeSignals.Api.Shared.SignalAnalysis;
@@ -6,15 +8,23 @@ namespace VSCodeSignals.Api.Features.AiAssistant.Handlers;
 
 public sealed class SignalAnalysisService(
     ImportedAudioFileResolver importedAudioFileResolver,
-    AudioAnalysisService audioAnalysisService) : ISignalAnalysisService
+    AudioAnalysisService audioAnalysisService,
+    IMemoryCache memoryCache) : ISignalAnalysisService
 {
     private const double LowBandUpperHz = 250d;
     private const double MidBandUpperHz = 2000d;
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(3);
+    private static readonly JsonSerializerOptions CacheSerializerOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<SignalSummaryDto> GetSignalSummaryAsync(WorkspaceContextDto context, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(context.SelectedFileId))
             throw new InvalidOperationException("A selected file is required for AI analysis.");
+
+        var cacheKey = BuildSignalSummaryCacheKey(context);
+
+        if (memoryCache.TryGetValue<SignalSummaryDto>(cacheKey, out var cachedSummary) && cachedSummary is not null)
+            return cachedSummary;
 
         var file = importedAudioFileResolver.Resolve(context.SelectedFileId);
         var signal = await audioAnalysisService.DecodeMonoAsync(file.ResolvedPath, ct);
@@ -26,7 +36,7 @@ public sealed class SignalAnalysisService(
         var spectralSummary = SummarizeSpectrum(spectrum);
         var spectrogramSummary = SummarizeSpectrogram(spectrogram);
 
-        return new SignalSummaryDto
+        var summary = new SignalSummaryDto
         {
             CrestFactor = metrics.CrestFactor,
             CrestFactorDb = metrics.CrestFactorDb,
@@ -49,6 +59,9 @@ public sealed class SignalAnalysisService(
             SpectrogramTemporalVariation = spectrogramSummary.TemporalVariation,
             SourcePath = file.SourcePath
         };
+
+        memoryCache.Set(cacheKey, summary, CacheDuration);
+        return summary;
     }
 
     public async Task<ComparisonSummaryDto?> GetComparisonSummaryAsync(
@@ -56,10 +69,18 @@ public sealed class SignalAnalysisService(
         SignalSummaryDto signalSummary,
         CancellationToken ct)
     {
+        var cacheKey = BuildComparisonSummaryCacheKey(context);
+
+        if (memoryCache.TryGetValue<ComparisonSummaryCacheEntry>(cacheKey, out var cachedEntry) && cachedEntry is not null)
+            return cachedEntry.Value;
+
         if (context.CompareFileIds.Count == 0)
         {
             if (!HasActiveTransforms(context.Transforms))
+            {
+                memoryCache.Set(cacheKey, new ComparisonSummaryCacheEntry(null), CacheDuration);
                 return null;
+            }
 
             var selectedFile = importedAudioFileResolver.Resolve(context.SelectedFileId);
             var originalSignal = await audioAnalysisService.DecodeMonoAsync(selectedFile.ResolvedPath, ct);
@@ -67,7 +88,7 @@ public sealed class SignalAnalysisService(
             var originalMetrics = audioAnalysisService.BuildMetrics(originalSignal);
             var originalSpectralSummary = SummarizeSpectrum(audioAnalysisService.BuildSpectrum(originalSignal));
 
-            return new ComparisonSummaryDto
+            var summary = new ComparisonSummaryDto
             {
                 Comparisons =
                 [
@@ -141,6 +162,9 @@ public sealed class SignalAnalysisService(
                 CompareFileIds = [],
                 PrimaryFileId = signalSummary.FileId
             };
+
+            memoryCache.Set(cacheKey, new ComparisonSummaryCacheEntry(summary), CacheDuration);
+            return summary;
         }
 
         var comparisons = new List<ComparisonDeltaDto>();
@@ -222,13 +246,41 @@ public sealed class SignalAnalysisService(
             });
         }
 
-        return new ComparisonSummaryDto
+        var comparisonSummary = new ComparisonSummaryDto
         {
             Comparisons = comparisons,
             CompareFileIds = comparisons.Select(item => item.FileId).ToList(),
             PrimaryFileId = signalSummary.FileId
         };
+
+        memoryCache.Set(cacheKey, new ComparisonSummaryCacheEntry(comparisonSummary), CacheDuration);
+        return comparisonSummary;
     }
+
+    private static string BuildSignalSummaryCacheKey(WorkspaceContextDto context) =>
+        string.Join('|',
+            "signal-summary",
+            context.WorkspaceId,
+            context.SelectedFileId,
+            SerializeSelection(context.Selection),
+            SerializeTransforms(context.Transforms));
+
+    private static string BuildComparisonSummaryCacheKey(WorkspaceContextDto context) =>
+        string.Join('|',
+            "comparison-summary",
+            context.WorkspaceId,
+            context.SelectedFileId,
+            string.Join(',', context.CompareFileIds.OrderBy(item => item, StringComparer.Ordinal)),
+            SerializeSelection(context.Selection),
+            SerializeTransforms(context.Transforms));
+
+    private static string SerializeSelection(SelectionRangeDto? selection) =>
+        selection is null
+            ? "full-file"
+            : JsonSerializer.Serialize(selection, CacheSerializerOptions);
+
+    private static string SerializeTransforms(SignalTransformRecipe transforms) =>
+        JsonSerializer.Serialize(transforms, CacheSerializerOptions);
 
     private static List<EvidenceItemDto> BuildSignalFacts(
         SignalMetrics metrics,
@@ -577,4 +629,6 @@ public sealed class SignalAnalysisService(
 
         public double TemporalVariation { get; init; }
     }
+
+    private sealed record ComparisonSummaryCacheEntry(ComparisonSummaryDto? Value);
 }
