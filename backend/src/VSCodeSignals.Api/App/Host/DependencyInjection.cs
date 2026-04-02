@@ -21,6 +21,7 @@ public static class DependencyInjection
         services.Configure<AiAssistantOptions>(configuration.GetSection("AiAssistant"));
         services.Configure<OllamaOptions>(configuration.GetSection("Ollama"));
         services.Configure<OpenAiOptions>(configuration.GetSection("OpenAI"));
+        services.AddMemoryCache();
         services.AddHttpClient<OpenAiLlmProvider>();
         services.AddHttpClient<OllamaLlmProvider>();
         services.AddSingleton<AiExecutionReceiptStore>();

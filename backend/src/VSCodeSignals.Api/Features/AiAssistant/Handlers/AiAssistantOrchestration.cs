@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -82,6 +83,8 @@ internal sealed class AiResponseComposer(
 
         foreach (var providerKey in ResolveProviderAttemptOrder(route))
         {
+            var providerStopwatch = Stopwatch.StartNew();
+
             try
             {
                 var provider = llmProviderRegistry.Resolve(providerKey);
@@ -113,6 +116,12 @@ internal sealed class AiResponseComposer(
                     Succeeded = true
                 });
 
+                logger.LogInformation(
+                    "AI narrative generated via {ProviderKey} for {Operation} in {ElapsedMs} ms.",
+                    providerKey,
+                    operation,
+                    providerStopwatch.ElapsedMilliseconds);
+
                 return new AiNarrativeResult
                 {
                     Answer = payload.Answer.Trim(),
@@ -140,7 +149,13 @@ internal sealed class AiResponseComposer(
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "AI assistant provider {ProviderKey} failed: {Reason}", providerKey, ex.Message);
+                logger.LogWarning(
+                    ex,
+                    "AI assistant provider {ProviderKey} failed for {Operation} after {ElapsedMs} ms: {Reason}",
+                    providerKey,
+                    operation,
+                    providerStopwatch.ElapsedMilliseconds,
+                    ex.Message);
             }
         }
 
@@ -157,6 +172,20 @@ internal sealed class AiResponseComposer(
 
         return fallback;
     }
+
+    public AiNarrativeResult BuildGroundedNarrative(
+        AiOperationKind operation,
+        WorkspaceContextDto context,
+        SignalSummaryDto signalSummary,
+        ComparisonSummaryDto? comparisonSummary,
+        ObservationBundle observationBundle) =>
+        BuildFallbackNarrative(
+            operation,
+            context,
+            signalSummary,
+            comparisonSummary,
+            observationBundle,
+            usedFallback: false);
 
     private static IReadOnlyList<string> ResolveProviderAttemptOrder(ModelRouteDecision route)
     {
@@ -221,7 +250,8 @@ internal sealed class AiResponseComposer(
         WorkspaceContextDto context,
         SignalSummaryDto signalSummary,
         ComparisonSummaryDto? comparisonSummary,
-        ObservationBundle observationBundle)
+        ObservationBundle observationBundle,
+        bool usedFallback = true)
     {
         var headline = GetDefaultHeadline(operation, context.ActiveView);
         string answer;
@@ -258,7 +288,7 @@ internal sealed class AiResponseComposer(
             PrimaryFinding = primaryFinding,
             RecommendedNextStep = observationBundle.RecommendedActions.FirstOrDefault() ?? "Inspect the current evidence and ask a narrower follow-up question.",
             RecommendedView = PickRecommendedView(context, observationBundle.Observations, comparisonSummary),
-            UsedFallback = true
+            UsedFallback = usedFallback
         };
     }
 
@@ -1108,44 +1138,80 @@ internal sealed class AiAssistantService(
     IAiActionPlanner actionPlanner,
     IAiActionValidator actionValidator,
     IWorkspaceCommandExecutor workspaceCommandExecutor,
-    AiResponseComposer responseComposer) : IAiAssistantService
+    AiResponseComposer responseComposer,
+    ILogger<AiAssistantService> logger) : IAiAssistantService
 {
     public async Task<WorkspaceContextDto> GetContextAsync(AiWorkspaceRequestContextDto request, CancellationToken ct) =>
         await workspaceContextService.BuildAsync(request, ct);
 
     public async Task<AiSummaryCardDto> SummaryAsync(AiSummaryRequestDto request, CancellationToken ct)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var phaseStopwatch = Stopwatch.StartNew();
         var context = await workspaceContextService.BuildAsync(request, ct);
+        var contextMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var signalSummary = await signalAnalysisService.GetSignalSummaryAsync(context, ct);
+        var signalSummaryMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var comparisonSummary = await signalAnalysisService.GetComparisonSummaryAsync(context, signalSummary, ct);
+        var comparisonSummaryMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var observationBundle = observationService.Build(context, signalSummary, comparisonSummary);
+        var observationMs = phaseStopwatch.ElapsedMilliseconds;
         var operation = comparisonSummary is not null && comparisonSummary.Comparisons.Count > 0
             ? AiOperationKind.Compare
             : AiOperationKind.Summary;
-        var summaryPrompt = operation == AiOperationKind.Compare
-            ? "Provide a first-pass comparison summary of the baseline and candidate signals."
-            : "Provide a first-pass summary of the current signal workspace state.";
-        var narrative = await responseComposer.GenerateNarrativeAsync(
+        var narrative = responseComposer.BuildGroundedNarrative(
             operation,
             context,
             signalSummary,
             comparisonSummary,
-            observationBundle,
-            summaryPrompt,
-            [],
-            ct);
+            observationBundle);
 
-        return responseComposer.BuildSummaryCard(operation, context, narrative, signalSummary, comparisonSummary, observationBundle);
+        var summaryCard = responseComposer.BuildSummaryCard(operation, context, narrative, signalSummary, comparisonSummary, observationBundle);
+
+        logger.LogInformation(
+            "AI summary completed in {TotalMs} ms (context={ContextMs} ms, signal={SignalMs} ms, comparison={ComparisonMs} ms, observations={ObservationMs} ms, operation={Operation}).",
+            totalStopwatch.ElapsedMilliseconds,
+            contextMs,
+            signalSummaryMs,
+            comparisonSummaryMs,
+            observationMs,
+            operation);
+
+        return summaryCard;
     }
 
     public async Task<AiResponseDto> AskAsync(AiRequestDto request, CancellationToken ct)
     {
+        var totalStopwatch = Stopwatch.StartNew();
+        var phaseStopwatch = Stopwatch.StartNew();
         var context = await workspaceContextService.BuildAsync(request, ct);
+        var contextMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var signalSummary = await signalAnalysisService.GetSignalSummaryAsync(context, ct);
+        var signalSummaryMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var comparisonSummary = await signalAnalysisService.GetComparisonSummaryAsync(context, signalSummary, ct);
+        var comparisonSummaryMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var observationBundle = observationService.Build(context, signalSummary, comparisonSummary);
+        var observationMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
+        var response = await aiOrchestrator.ProcessAsync(request, context, signalSummary, comparisonSummary, observationBundle, ct);
+        var narrativeMs = phaseStopwatch.ElapsedMilliseconds;
 
-        return await aiOrchestrator.ProcessAsync(request, context, signalSummary, comparisonSummary, observationBundle, ct);
+        logger.LogInformation(
+            "AI ask completed in {TotalMs} ms (context={ContextMs} ms, signal={SignalMs} ms, comparison={ComparisonMs} ms, observations={ObservationMs} ms, narrative={NarrativeMs} ms).",
+            totalStopwatch.ElapsedMilliseconds,
+            contextMs,
+            signalSummaryMs,
+            comparisonSummaryMs,
+            observationMs,
+            narrativeMs);
+
+        return response;
     }
 
     public async Task<AiActionProposalDto> PlanActionAsync(AiPlanActionRequestDto request, CancellationToken ct)
@@ -1179,27 +1245,47 @@ internal sealed class AiAssistantService(
         if (!request.Confirmed)
             throw new InvalidOperationException("Assistant actions require explicit confirmation before execution.");
 
+        var totalStopwatch = Stopwatch.StartNew();
+        var phaseStopwatch = Stopwatch.StartNew();
         var context = await workspaceContextService.BuildAsync(request, ct);
+        var contextMs = phaseStopwatch.ElapsedMilliseconds;
         var validation = actionValidator.Validate(request.Proposal, context);
 
         if (!validation.IsValid)
             throw new InvalidOperationException(string.Join(" ", validation.Errors));
 
+        phaseStopwatch.Restart();
         var execution = await workspaceCommandExecutor.ExecuteAsync(request.Proposal, context, ct);
+        var executionMs = phaseStopwatch.ElapsedMilliseconds;
         var nextRequest = ApplyPatch(request, execution.Patch);
+        phaseStopwatch.Restart();
         var nextContext = await workspaceContextService.BuildAsync(nextRequest, ct);
+        var nextContextMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var signalSummary = await signalAnalysisService.GetSignalSummaryAsync(nextContext, ct);
+        var signalSummaryMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var comparisonSummary = await signalAnalysisService.GetComparisonSummaryAsync(nextContext, signalSummary, ct);
+        var comparisonSummaryMs = phaseStopwatch.ElapsedMilliseconds;
+        phaseStopwatch.Restart();
         var observationBundle = observationService.Build(nextContext, signalSummary, comparisonSummary);
-        var narrative = await responseComposer.GenerateNarrativeAsync(
+        var observationMs = phaseStopwatch.ElapsedMilliseconds;
+        var narrative = responseComposer.BuildGroundedNarrative(
             AiOperationKind.Explain,
             nextContext,
             signalSummary,
             comparisonSummary,
-            observationBundle,
-            "Summarize the result of the just-executed assistant action.",
-            [],
-            ct);
+            observationBundle);
+
+        logger.LogInformation(
+            "AI execute-action completed in {TotalMs} ms (context={ContextMs} ms, execute={ExecuteMs} ms, nextContext={NextContextMs} ms, signal={SignalMs} ms, comparison={ComparisonMs} ms, observations={ObservationMs} ms).",
+            totalStopwatch.ElapsedMilliseconds,
+            contextMs,
+            executionMs,
+            nextContextMs,
+            signalSummaryMs,
+            comparisonSummaryMs,
+            observationMs);
 
         return new AiResponseDto
         {
@@ -1212,7 +1298,7 @@ internal sealed class AiAssistantService(
             Observations = observationBundle.Observations,
             Status = "ready",
             SummaryCard = responseComposer.BuildSummaryCard(AiOperationKind.Explain, nextContext, narrative, signalSummary, comparisonSummary, observationBundle),
-            UsedFallback = narrative.UsedFallback,
+            UsedFallback = false,
             WorkspacePatch = execution.Patch
         };
     }

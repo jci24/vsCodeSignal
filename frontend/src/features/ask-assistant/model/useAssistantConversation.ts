@@ -15,6 +15,7 @@ import { serializeTransformRecipe } from '@/features/transforms/utils/types'
 export interface IAssistantMessage {
   content: string
   id: string
+  isPreview?: boolean
   role: 'assistant' | 'user'
   status?: IAiResponse['status']
 }
@@ -144,7 +145,21 @@ export function useAssistantConversation({
       id: createId(),
       role: 'user',
     }
-    const nextMessages = [...messages, userMessage]
+    const previewMessage = buildStagedAskPreview(trimmed, workspaceSummaryCard)
+    const previewMessageId = previewMessage ? createId() : null
+    const nextMessages = [
+      ...messages,
+      userMessage,
+      ...(previewMessage && previewMessageId
+        ? [{
+            content: previewMessage,
+            id: previewMessageId,
+            isPreview: true,
+            role: 'assistant' as const,
+            status: 'ready' as const,
+          }]
+        : []),
+    ]
     setMessages(nextMessages)
     setIsLoading(true)
     setErrorMessage(null)
@@ -156,15 +171,30 @@ export function useAssistantConversation({
         prompt: trimmed,
       })
 
-      setMessages((current) => [
-        ...current,
-        {
-          content: response.message,
-          id: createId(),
-          role: 'assistant',
-          status: response.status,
-        },
-      ])
+      setMessages((current) => {
+        if (!previewMessageId) {
+          return [
+            ...current,
+            {
+              content: response.message,
+              id: createId(),
+              role: 'assistant',
+              status: response.status,
+            },
+          ]
+        }
+
+        return current.map((message) =>
+          message.id === previewMessageId
+            ? {
+                content: response.message,
+                id: message.id,
+                role: 'assistant',
+                status: response.status,
+              }
+            : message,
+        )
+      })
       setProposal(response.actionProposal ?? null)
       setLatestResult(response)
 
@@ -196,4 +226,48 @@ export function useAssistantConversation({
     setProposal,
     summaryCard: workspaceSummaryCard,
   }
+}
+
+function buildStagedAskPreview(prompt: string, summaryCard: IAiSummaryCard | null): string | null {
+  if (!summaryCard) {
+    return null
+  }
+
+  const normalizedPrompt = prompt.toLowerCase()
+  const primaryFinding = summaryCard.primaryFinding || summaryCard.summary
+  const impactSummary = summaryCard.impactSummary
+  const nextStep = summaryCard.recommendedNextStep || summaryCard.nextSteps[0] || ''
+
+  if (normalizedPrompt.includes('why')) {
+    return [
+      impactSummary || primaryFinding,
+      nextStep ? `Next best step: ${nextStep}` : '',
+      'Refining the full answer…',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  if (
+    normalizedPrompt.includes('next') ||
+    normalizedPrompt.includes('inspect') ||
+    normalizedPrompt.includes('what should')
+  ) {
+    return [
+      nextStep || primaryFinding,
+      impactSummary ? `Why it matters: ${impactSummary}` : '',
+      'Refining the full answer…',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  return [
+    primaryFinding,
+    impactSummary ? `Why it matters: ${impactSummary}` : '',
+    nextStep ? `Next best step: ${nextStep}` : '',
+    'Refining the full answer…',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
