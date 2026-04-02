@@ -1184,9 +1184,6 @@ internal sealed class AiOrchestrator(
         if (intentResult.Intent == AiIntentType.Action || intentResult.Intent == AiIntentType.Unsupported)
             return false;
 
-        if (request.History.Count > 0)
-            return false;
-
         var prompt = string.IsNullOrWhiteSpace(request.Prompt)
             ? "What stands out in this signal?"
             : request.Prompt.Trim();
@@ -1200,6 +1197,9 @@ internal sealed class AiOrchestrator(
             return false;
 
         if (RequiresLlmSynthesis(normalized))
+            return false;
+
+        if (request.History.Count > 0 && !SupportsLocalFollowUp(normalizedPrompt: normalized, intent: intentResult.Intent))
             return false;
 
         return IsLocalFirstPrompt(normalized, intentResult.Intent);
@@ -1277,6 +1277,33 @@ internal sealed class AiOrchestrator(
                  recommendMarkers.Any(normalizedPrompt.Contains) ||
                  clarifyMarkers.Any(marker => normalizedPrompt.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
         };
+    }
+
+    private static bool SupportsLocalFollowUp(string normalizedPrompt, AiIntentType intent)
+    {
+        string[] safeFollowUps =
+        [
+            "what changed",
+            "what stands out",
+            "what stand out",
+            "why does it matter",
+            "why does that matter",
+            "what should i inspect next",
+            "what should i do next",
+            "what next",
+            "what to inspect next",
+            "what matters most",
+            "explain this",
+            "explain the signal",
+            "explain this signal",
+            "explain this fft",
+            "explain this spectrogram"
+        ];
+
+        if (intent == AiIntentType.Action)
+            return false;
+
+        return safeFollowUps.Any(normalizedPrompt.Contains);
     }
 
     private static int CountOccurrences(string value, char needle)

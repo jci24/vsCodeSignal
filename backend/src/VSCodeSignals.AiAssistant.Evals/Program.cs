@@ -49,7 +49,7 @@ Run("Multi-turn ask stays on LLM path", () =>
     var classifier = new RuleBasedAiIntentClassifier();
     var request = new AiRequestDto
     {
-        Prompt = "Why does that matter?",
+        Prompt = "Rewrite this for a client update.",
         History =
         [
             new AiConversationTurnDto
@@ -63,6 +63,32 @@ Run("Multi-turn ask stays on LLM path", () =>
     var intent = classifier.Classify(request, context);
 
     return !AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
+Run("Simple follow-up ask with history stays on local grounded path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "What changed?",
+        History =
+        [
+            new AiConversationTurnDto
+            {
+                Content = "Explain this comparison.",
+                Role = "user"
+            },
+            new AiConversationTurnDto
+            {
+                Content = "The candidate is quieter than the baseline.",
+                Role = "assistant"
+            }
+        ]
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return AiOrchestrator.ShouldHandleAskLocally(request, intent);
 });
 
 Run("Intent compare routes transform question to compare", () =>
