@@ -18,6 +18,79 @@ Run("Intent explain routes correctly", () =>
     return result.Intent == AiIntentType.Explain;
 });
 
+Run("Simple compare ask stays on local grounded path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "What changed between these two signals?"
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
+Run("Rewrite-style ask stays on LLM path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "Rewrite this explanation for a client update."
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return !AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
+Run("Multi-turn ask stays on LLM path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "Rewrite this for a client update.",
+        History =
+        [
+            new AiConversationTurnDto
+            {
+                Content = "What changed between these two signals?",
+                Role = "user"
+            }
+        ]
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return !AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
+Run("Simple follow-up ask with history stays on local grounded path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "What changed?",
+        History =
+        [
+            new AiConversationTurnDto
+            {
+                Content = "Explain this comparison.",
+                Role = "user"
+            },
+            new AiConversationTurnDto
+            {
+                Content = "The candidate is quieter than the baseline.",
+                Role = "assistant"
+            }
+        ]
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
 Run("Intent compare routes transform question to compare", () =>
 {
     var classifier = new RuleBasedAiIntentClassifier();
