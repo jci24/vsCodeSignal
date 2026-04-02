@@ -18,6 +18,53 @@ Run("Intent explain routes correctly", () =>
     return result.Intent == AiIntentType.Explain;
 });
 
+Run("Simple compare ask stays on local grounded path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "What changed between these two signals?"
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
+Run("Rewrite-style ask stays on LLM path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "Rewrite this explanation for a client update."
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return !AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
+Run("Multi-turn ask stays on LLM path", () =>
+{
+    var classifier = new RuleBasedAiIntentClassifier();
+    var request = new AiRequestDto
+    {
+        Prompt = "Why does that matter?",
+        History =
+        [
+            new AiConversationTurnDto
+            {
+                Content = "What changed between these two signals?",
+                Role = "user"
+            }
+        ]
+    };
+    var context = CreateContext(activeView: "waveform");
+    var intent = classifier.Classify(request, context);
+
+    return !AiOrchestrator.ShouldHandleAskLocally(request, intent);
+});
+
 Run("Intent compare routes transform question to compare", () =>
 {
     var classifier = new RuleBasedAiIntentClassifier();

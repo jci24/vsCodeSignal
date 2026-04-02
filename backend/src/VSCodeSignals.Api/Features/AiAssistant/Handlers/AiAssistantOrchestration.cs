@@ -173,6 +173,24 @@ internal sealed class AiResponseComposer(
         return fallback;
     }
 
+    public void RecordNarrativeRoute(
+        AiOperationKind operation,
+        string providerKey,
+        string model,
+        bool usedFallback = false)
+    {
+        receiptStore.Record(new AiExecutionReceipt
+        {
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            FailureReason = string.Empty,
+            Model = model,
+            Operation = operation.ToString(),
+            ProviderKey = providerKey,
+            Succeeded = true,
+            UsedFallback = usedFallback
+        });
+    }
+
     public AiNarrativeResult BuildGroundedNarrative(
         AiOperationKind operation,
         WorkspaceContextDto context,
@@ -1044,7 +1062,8 @@ internal sealed class AiResponseComposer(
 internal sealed class AiOrchestrator(
     IAiIntentClassifier intentClassifier,
     IAiActionPlanner actionPlanner,
-    AiResponseComposer responseComposer) : IAiOrchestrator
+    AiResponseComposer responseComposer,
+    ILogger<AiOrchestrator> logger) : IAiOrchestrator
 {
     public async Task<AiResponseDto> ProcessAsync(
         AiRequestDto request,
@@ -1105,6 +1124,37 @@ internal sealed class AiOrchestrator(
             AiIntentType.Recommend => AiOperationKind.Recommend,
             _ => AiOperationKind.Explain
         };
+
+        if (ShouldHandleAskLocally(request, intentResult))
+        {
+            var localStopwatch = Stopwatch.StartNew();
+            var localNarrative = responseComposer.BuildGroundedNarrative(
+                operation,
+                context,
+                signalSummary,
+                comparisonSummary,
+                observationBundle);
+            responseComposer.RecordNarrativeRoute(operation, "local_grounded", "grounded-backend");
+
+            logger.LogInformation(
+                "AI ask routed to local_grounded for {Operation} in {ElapsedMs} ms.",
+                operation,
+                localStopwatch.ElapsedMilliseconds);
+
+            return new AiResponseDto
+            {
+                Context = context,
+                FollowUpPrompts = responseComposer.BuildFollowUps(operation, localNarrative, observationBundle),
+                Intent = intentResult.Intent.ToString().ToLowerInvariant(),
+                Limitations = observationBundle.Limitations,
+                Message = localNarrative.Answer,
+                Observations = observationBundle.Observations,
+                Status = "ready",
+                SummaryCard = responseComposer.BuildSummaryCard(operation, context, localNarrative, signalSummary, comparisonSummary, observationBundle),
+                UsedFallback = false
+            };
+        }
+
         var narrative = await responseComposer.GenerateNarrativeAsync(
             operation,
             context,
@@ -1127,6 +1177,119 @@ internal sealed class AiOrchestrator(
             SummaryCard = responseComposer.BuildSummaryCard(operation, context, narrative, signalSummary, comparisonSummary, observationBundle),
             UsedFallback = narrative.UsedFallback
         };
+    }
+
+    internal static bool ShouldHandleAskLocally(AiRequestDto request, AiIntentResult intentResult)
+    {
+        if (intentResult.Intent == AiIntentType.Action || intentResult.Intent == AiIntentType.Unsupported)
+            return false;
+
+        if (request.History.Count > 0)
+            return false;
+
+        var prompt = string.IsNullOrWhiteSpace(request.Prompt)
+            ? "What stands out in this signal?"
+            : request.Prompt.Trim();
+
+        if (prompt.Length > 180 || prompt.Contains('\n', StringComparison.Ordinal))
+            return false;
+
+        var normalized = prompt.ToLowerInvariant();
+
+        if (CountOccurrences(normalized, '?') > 1)
+            return false;
+
+        if (RequiresLlmSynthesis(normalized))
+            return false;
+
+        return IsLocalFirstPrompt(normalized, intentResult.Intent);
+    }
+
+    private static bool RequiresLlmSynthesis(string normalizedPrompt)
+    {
+        string[] llmOnlyMarkers =
+        [
+            "rewrite",
+            "rephrase",
+            "make this",
+            "draft",
+            "email",
+            "message for",
+            "send to",
+            "report",
+            "bullet list",
+            "table",
+            "json",
+            "markdown",
+            "summarize for",
+            "summarise for",
+            "presentation",
+            "client",
+            "stakeholder"
+        ];
+
+        return llmOnlyMarkers.Any(normalizedPrompt.Contains);
+    }
+
+    private static bool IsLocalFirstPrompt(string normalizedPrompt, AiIntentType intent)
+    {
+        string[] explainMarkers =
+        [
+            "what changed",
+            "what stands out",
+            "what stand out",
+            "what do you notice",
+            "explain this",
+            "explain the signal",
+            "explain this signal",
+            "explain this fft",
+            "explain this spectrogram",
+            "explain the fft",
+            "explain the spectrogram",
+            "what is happening",
+            "what happened"
+        ];
+        string[] recommendMarkers =
+        [
+            "what should i inspect next",
+            "what should i do next",
+            "what next",
+            "what to inspect next",
+            "what should i inspect",
+            "what should i verify",
+            "what matters most"
+        ];
+        string[] clarifyMarkers =
+        [
+            "why",
+            "why does it matter",
+            "why does that matter",
+            "why is that important"
+        ];
+
+        return intent switch
+        {
+            AiIntentType.Compare => explainMarkers.Any(normalizedPrompt.Contains),
+            AiIntentType.Recommend => recommendMarkers.Any(normalizedPrompt.Contains) || explainMarkers.Any(normalizedPrompt.Contains),
+            AiIntentType.Clarify => clarifyMarkers.Any(marker => normalizedPrompt.StartsWith(marker, StringComparison.OrdinalIgnoreCase)) ||
+                                    normalizedPrompt.Contains("why does it matter", StringComparison.OrdinalIgnoreCase),
+            _ => explainMarkers.Any(normalizedPrompt.Contains) ||
+                 recommendMarkers.Any(normalizedPrompt.Contains) ||
+                 clarifyMarkers.Any(marker => normalizedPrompt.StartsWith(marker, StringComparison.OrdinalIgnoreCase))
+        };
+    }
+
+    private static int CountOccurrences(string value, char needle)
+    {
+        var count = 0;
+
+        foreach (var character in value)
+        {
+            if (character == needle)
+                count++;
+        }
+
+        return count;
     }
 }
 
